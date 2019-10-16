@@ -10,12 +10,19 @@ Final report time: Dec. 3rd 12:00-12:30pm
 
 ### Reference
 Paper:
-[BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805)
-[Progressive Growing of GANs for Improved Quality, Stability, and Variation](https://arxiv.org/abs/1710.10196)
-[A Style-Based Generator Architecture for Generative Adversarial Networks](https://arxiv.org/abs/1812.04948)
-[Image-to-Image Translation with Conditional Adversarial Networks](https://arxiv.org/abs/1611.07004)
-[Generative Adversarial Text to Image Synthesis](https://arxiv.org/abs/1605.05396)
+
+BERT: [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805)
+
+pgGAN: [Progressive Growing of GANs for Improved Quality, Stability, and Variation](https://arxiv.org/abs/1710.10196)
+
+styleGAN: [A Style-Based Generator Architecture for Generative Adversarial Networks](https://arxiv.org/abs/1812.04948)
+
+cGAN: [Image-to-Image Translation with Conditional Adversarial Networks](https://arxiv.org/abs/1611.07004)
+
+text2image: [Generative Adversarial Text to Image Synthesis](https://arxiv.org/abs/1605.05396)  
 
 Github:
-[https://github.com/NVlabs/stylegan](https://github.com/NVlabs/stylegan)
-[https://github.com/nashory/text2image-benchmark](https://github.com/nashory/text2image-benchmark)
+
+styleGAN: [https://github.com/NVlabs/stylegan](https://github.com/NVlabs/stylegan)
+
+text2image: [https://github.com/nashory/text2image-benchmark](https://github.com/nashory/text2image-benchmark)
