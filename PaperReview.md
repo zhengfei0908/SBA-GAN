@@ -17,6 +17,9 @@
 - 提取了句子的sentence级别和word级别信息。
 - 网络结构类似于stackGAN++，在不同stack之间加入了word级别信息的attention模型的结果
 - 还需要具体看看
+
+### MirrorGAN(最新)
+
 ### StyleGAN
 ### LoGAN
 - 就是刚发的Conditional StyleGAN那篇
