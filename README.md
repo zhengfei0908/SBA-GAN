@@ -1,4 +1,4 @@
-# COMS4995-StyleGAN
+# COMS4995_SBA-GAN
 
 ## Task
 Fei Zheng: main model
@@ -12,6 +12,14 @@ Xiaoxi Zhao: dataloader, metrics and util functions
 - dataloader.py(batch, dir....)
 - metrics.py(inception score, R-precision)
 - util.py...to be decided
+#############finished############
+
+## TODO
+1. Code Integration
+2. Progressive training
+3. WGAN loss
+4. Try different architectures
+
 
 ## Timeline
 Proposal: Oct. 15th 11:30-12:00am
