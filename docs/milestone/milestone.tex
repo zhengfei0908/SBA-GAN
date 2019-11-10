@@ -104,19 +104,19 @@ With the appearance of StyleGAN\cite{stylegan}, researchers have proposed new ne
 \begin{figure*}[htbp]
 
 \centering
-\includegraphics[width=400pt, height=200pt]{milestone/network.png} 
-\caption{Structure of SBA-GAN. With the combination of the ideas from\cite{stylegan},\cite{stackgan}, we first map the concatenated latent variable with augmented sentence feature to an intermediate latent space $\mathcal{W}$,which then is concatenated with attention from word feature to control the generator through adaptive instance normalization(AdaIN) at each convolution layer. Gaussian noise is added after each convolution(not showed in the figure). Here, A stands for a learned affine transform. The mapping network $f$ consists of 8 layers and the synthesis network $g$ consists of 10 layers -- two for each resolution($4^2 - 256^2$). The output of the last layer is converted to RGB using a separate 1$\times$1 convolution, similar to \cite{progan}.}
+\includegraphics[width=450pt, height=200pt]{milestone/network.png} 
+\caption{The architecture of SBA-GAN. The random latent variable is concatenated with conditionally augmented(CA) sentence feature and then goes through the mapping network to an intermediate latent space $\mathcal{W}$. During each step of progressive training process, word features and past images are combined to generate new attentional styles, which are applied later in adaptive instanve normalization(AdaIN) layers. The attentional style generator network $g$ consist of 10 layers -- two for each resolution($4^2 - 256^2$). The discriminator is similar to progressive GAN\cite{progan}.}
 \label{model}
 \end{figure*}
 
 \section{Style-Based Attentional Generative Adversarial Network}
-As shown in Figure \ref{model}, SBA-GAN integrates both StyleGAN\cite{stylegan} and AttnGAN\cite{attngan} and embodies the attention modules into the progressive generation process. Disentangled by mapping network, latent code $w$ can control the style of generated images better. By attention modules, text can influence the objects generation better. Technically, SBA-GAN is mainly consist of two modules: \textbf{text encoder module}, \textbf{attentional style generator module}. We will introduce these modules below.
+As shown in Figure \ref{model}, SBA-GAN integrates both StyleGAN\cite{stylegan} and AttnGAN\cite{attngan} and embodies the attention modules into the progressive generation process. Disentangled by mapping network, latent code $w$ can control the style of generated images better. By attention modules, text can influence the objects generation better. Technically, SBA-GAN is mainly consist of two modules: text encoder module, attentional style generator module. We will introduce these modules below.
 
 
 \subsection{Text Encoder Module}
-First, we introduce the text encoder module that transforms the texts to features. \textbf{BERT}\cite{bert} is a great breakthrough in the domain of pre-trained natural language processing. We borrow the pre-trained model and embed the given text description into both word-level features that work mainly in attention modules and sentence-level features that work mainly in generation process. In consideration of limited computation resources, we freeze all the layers in BERT.
+First, we introduce the text encoder module that transforms the texts to features. BERT\cite{bert} is a great breakthrough in the domain of pre-trained natural language processing. We borrow the pre-trained model and embed the given text description into both word-level features that work mainly in attention modules and sentence-level features that work mainly in generation process. In consideration of limited computation resources, we freeze all the layers in BERT.
 
-Due to the diversity of the text domain and in order to enhance the model robustness, we introduce some noises in sentence-level features by using \textbf{Conditional Augmentation}\cite{stackgan}. In Figure \ref{model}, we use $F^{ca}$ to represent this module.
+Due to the diversity of the text domain and in order to enhance the model robustness, we introduce some noises in sentence-level features by using Conditional Augmentation\cite{stackgan}. In Figure \ref{model}, we use $F^{ca}$ to represent this module.
 \begin{equation}
     \bar{e}_{ca} = F^{ca}(\bar{e}),
 \end{equation}
@@ -129,7 +129,7 @@ Next we introduce the style-base attentional generator module. We adopt the gene
 \begin{equation}
     w = MLP(z)
 \end{equation}
-In the generation part, we follow the practice of StyleGAN and use the structure of ProgressiveGAN\cite{progan} to generate images from resolution $4^2$ to $256^2$ step by step. During each step, we mix the information from both previous image feature $f$ and word-level features $w$ by \textbf{attention module}, which is proposed by AttnGAN\cite{attngan}.
+In the generation part, we follow the practice of StyleGAN and use the structure of ProgressiveGAN\cite{progan} to generate images from resolution $4^2$ to $256^2$ step by step. During each step, we mix the information from both previous image feature $f$ and word-level features $w$ by attention module, which is proposed by AttnGAN\cite{attngan}.
 \begin{equation}
     Att = FC(\sum_{l=0}^{L-1} (Uw^l)(softmax(f^T (Uw^l)))^T),
 \end{equation}
@@ -141,7 +141,7 @@ Then we concatenate the attention code with disentangled latent code $w$ and use
 \end{equation}
 where each feature map $x_i$ is normalized separately, and then scaled and biased using the corresponding scalar components from \textit{style} $y$. So the dimension of $y$ is twice the number of features on that layer.
 
-For \textbf{Discriminator} part. We follow the practice of ProgressiveGAN\cite{progan} and reverse generator network except attetion module to attain image features.
+For Discriminator part. We follow the practice of ProgressiveGAN\cite{progan} and reverse generator network except attetion module to attain image features.
 
 \subsection{Objective functions}
 Following common practice, we employ the GAN loss that embodies both conditional and unconditional. The loss is defined as
@@ -149,12 +149,12 @@ Following common practice, we employ the GAN loss that embodies both conditional
     \mathcal{L}_{G'} = -\frac{1}{2}\mathrm{E}_{\hat{x} \sim P_G [log(D(\hat{x})]} - \frac{1}{2}\mathrm{E}_{\hat{x} \sim P_G [log(D(\hat{x}, \bar{e})]}
 \end{align}
 \begin{align}
-    \mathcal{L}_{D} = &-\frac{1}{2}\mathrm{E}_{\hat{x} \sim P_{data} [log(D(\hat{x})]} - \frac{1}{2}\mathrm{E}_{\hat{x} \sim P_G [log(1 - D(\hat{x}, \bar{e})]} \nonumber \\
+    \mathcal{L}_{D} = &-\frac{1}{2}\mathrm{E}_{\hat{x} \sim P_{data} [log(D(\hat{x})]} - \frac{1}{2}\mathrm{E}_{\hat{x} \sim P_G [log(1 - D(\hat{x})]} \nonumber \\
     &- \frac{1}{2} \mathrm{E}_{\hat{x} \sim P_{data} [log(D(\hat{x}, \bar{e})]} - \frac{1}{2}\mathrm{E}_{\hat{x} \sim P_G [log(1 - D(\hat{x}, \bar{e})]},
 \end{align}
 where $x$ is from the true image distribution $P_{data}$ and $\hat{x}$ is from the model distribution $P_G$. The unconditional loss determines whether the image is real or fake and the conditional loss determines whether the image matches the sentence or not.
 
-Apart from the common GAN loss, we also include the cosine similarity score in generation part since this can make generated image and text match better. For \textbf{text encoder} part, we use BERT to attain sentence embedding $\bar{e}$, as described above. For \textbf{image encoder}, we adopt Inception v3\cite{inception} to attain image embedding $\bar{c}$. The cosine similarity score can be calculated as $R(\bar{c}, \bar{e}) = (\bar{c}^T \bar{e})/(\Vert \bar{c} \Vert \Vert \bar{e}\Vert)$.
+Apart from the common GAN loss, we also include the cosine similarity score in generation part since this can make generated image and text match better. For text encoder part, we use BERT to attain sentence embedding $\bar{e}$, as described above. For image encoder, we adopt Inception v3\cite{inception} to attain image embedding $\bar{c}$. The cosine similarity score can be calculated as $R(\bar{c}, \bar{e}) = (\bar{c}^T \bar{e})/(\Vert \bar{c} \Vert \Vert \bar{e}\Vert)$.
 
 
 
@@ -175,7 +175,11 @@ R-precision is on the other hand, an evaluation metric to measure the similarity
 
 \subsubsection{Implementation Details}
 \subsection{Main Results}
-We've finished the coding of our main structure, which can be found on github \href{https://github.com/zhengfei0908/COMS4995-StyleGAN}{https://github.com/zhengfei0908/COMS4995-StyleGAN}
+The coding part can be found on github \href{https://github.com/zhengfei0908/SBA-GAN}{https://github.com/zhengfei0908/SBA-GAN}.
+
+The preliminary results can be found on \href{https://drive.google.com/drive/u/1/folders/11J_XfP8IE53kUUfCL9ZGYbF5ZRvPyejj}{https://drive.google.com/drive/u/1/folders/11J_XfP8IE53kUUfCL9ZGYbF5ZRvPyejj}
+
+We haven't finished running our model so we don't have any generated images for now, but we will upload our generated images by Sunday night.
 
 \newpage
 
