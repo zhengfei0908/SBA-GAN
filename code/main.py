@@ -3,6 +3,7 @@ from __future__ import print_function
 from miscc.config import cfg, cfg_from_file
 from datasets import TextDataset
 from trainer import condGANTrainer as trainer
+from pytorch_pretrained_bert import BertTokenizer
 
 import os
 import sys
@@ -88,10 +89,10 @@ if __name__ == "__main__":
     if args.cfg_file is not None:
         cfg_from_file(args.cfg_file)
 
-    if args.gpu_id != -1:
-        cfg.GPU_ID = args.gpu_id
-    else:
-        cfg.CUDA = False
+#     if args.gpu_id != -1:
+#         cfg.GPU_ID = args.gpu_id
+#     else:
+#         cfg.CUDA = False
 
     if args.data_dir != '':
         cfg.DATA_DIR = args.data_dir

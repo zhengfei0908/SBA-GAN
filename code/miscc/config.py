@@ -15,7 +15,7 @@ __C.CONFIG_NAME = ''
 __C.DATA_DIR = '../data/birds'
 __C.GPU_ID = 0
 __C.CUDA = False
-__C.WORKERS = 6
+__C.WORKERS = 4
 
 
 __C.E_DIM = 768          # Word embedding dimension
@@ -39,8 +39,8 @@ __C.M.LAYERS = 6
 # Training options
 __C.TRAIN = edict()
 __C.TRAIN.BATCH_SIZE = 8
-__C.TRAIN.MAX_EPOCH = 1
-__C.TRAIN.SNAPSHOT_INTERVAL = 2000
+__C.TRAIN.MAX_EPOCH = 100
+__C.TRAIN.SNAPSHOT_INTERVAL = 10
 __C.TRAIN.DISCRIMINATOR_LR = 1e-4
 __C.TRAIN.GENERATOR_LR = 2e-4
 __C.TRAIN.ENCODER_LR = 2e-4
