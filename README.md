@@ -20,6 +20,9 @@ Xiaoxi Zhao: dataloader, metrics and util functions
 3. WGAN loss
 4. Try different architectures
 
+## Results:
+
+Generated images: https://drive.google.com/drive/folders/11J_XfP8IE53kUUfCL9ZGYbF5ZRvPyejj
 
 ## Timeline
 Proposal: Oct. 15th 11:30-12:00am
@@ -49,3 +52,4 @@ styleGAN: [https://github.com/NVlabs/stylegan](https://github.com/NVlabs/stylega
 text2image: [https://github.com/nashory/text2image-benchmark](https://github.com/nashory/text2image-benchmark)
 
 StyleGAN-tf2: [https://github.com/ialhashim/StyleGAN-Tensorflow2](https://github.com/ialhashim/StyleGAN-Tensorflow2)
+
