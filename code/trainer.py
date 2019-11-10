@@ -9,9 +9,9 @@ import torch.backends.cudnn as cudnn
 from PIL import Image
 from miscc.config import cfg
 # from miscc.config import cfg
-# from miscc.utils import mkdir_p
+from miscc.utils import mkdir_p
 # from miscc.utils import build_super_images, build_super_images2
-# from miscc.utils import weights_init, load_params, copy_G_params
+from miscc.utils import weights_init, load_params, copy_G_params
 # from model import G_DCGAN, G_NET
 # from model import D_NET, G_NET,IMAGE_ENCODER,BERT_EMBEDDING(
 from model import *
@@ -26,24 +26,22 @@ import sys
 # ################# Text to image task############################ #
 class condGANTrainer(object):
     def __init__(self, output_dir, data_loader):
-#         if cfg.TRAIN.FLAG:
-#             self.model_dir = os.path.join(output_dir, 'Model')
-#             self.image_dir = os.path.join(output_dir, 'Image')
-#             mkdir_p(self.model_dir)
-#             mkdir_p(self.image_dir)
+        if cfg.TRAIN.FLAG:
+            self.model_dir = os.path.join(output_dir, 'Model')
+            self.image_dir = os.path.join(output_dir, 'Image')
+            mkdir_p(self.model_dir)
+            mkdir_p(self.image_dir)
 
 #         torch.cuda.set_device(cfg.GPU_ID)
         cudnn.benchmark = True
 
         self.batch_size = cfg.TRAIN.BATCH_SIZE
         self.max_epoch = cfg.TRAIN.MAX_EPOCH
-#         self.snapshot_interval = cfg.TRAIN.SNAPSHOT_INTERVAL
-
-#         self.n_words = n_words
-#         self.ixtoword = ixtoword
+        self.snapshot_interval = cfg.TRAIN.SNAPSHOT_INTERVAL
         self.data_loader = data_loader
         self.num_batches = len(self.data_loader)
-
+        self.tokenizer = BertTokenizer.from_pretrained(cfg.TEXT.PRETRAINED_MODEL)
+    
     def build_models(self):
         # ###################encoders######################################## #
         
@@ -92,18 +90,16 @@ class condGANTrainer(object):
 
         return real_labels, fake_labels, match_labels
 
-#     def save_model(self, netG, avg_param_G, netsD, epoch):
-#         backup_para = copy_G_params(netG)
-#         load_params(netG, avg_param_G)
-#         torch.save(netG.state_dict(),
-#             '%s/netG_epoch_%d.pth' % (self.model_dir, epoch))
-#         load_params(netG, backup_para)
-#         #
-#         for i in range(len(netsD)):
-#             netD = netsD[i]
-#             torch.save(netD.state_dict(),
-#                 '%s/netD%d.pth' % (self.model_dir, i))
-#         print('Save G/Ds models.')
+    def save_model(self, netG, avg_param_G, netsD, epoch):
+        backup_para = copy_G_params(netG)
+        load_params(netG, avg_param_G)
+        torch.save(netG.state_dict(),
+            '%s/netG_epoch_%d.pth' % (self.model_dir, epoch))
+        load_params(netG, backup_para)
+
+        torch.save(netD.state_dict(),
+                '%s/netD.pth' % (self.model_dir))
+        print('Save G/Ds models.')
 
 #     def set_requires_grad_value(self, models_list, brequires):
 #         for i in range(len(models_list)):
@@ -153,15 +149,12 @@ class condGANTrainer(object):
 
     def train(self):
         text_encoder, image_encoder, netG, netD, start_epoch = self.build_models()
-#         avg_param_G = copy_G_params(netG)
+        avg_param_G = copy_G_params(netG)
         optimizerG, optimizersD = self.define_optimizers(netG, netD)
         print("Load optimizers")
         real_labels, fake_labels, match_labels = self.prepare_labels()
 
         batch_size = self.batch_size
-#         nz = cfg.GAN.Z_DIM
-#         noise = Variable(torch.FloatTensor(batch_size, nz))
-#         fixed_noise = Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1))
         z_code = torch.rand(batch_size, cfg.Z_DIM)
         
         if cfg.CUDA:
@@ -174,8 +167,8 @@ class condGANTrainer(object):
 
             data_iter = iter(self.data_loader)
             step = 0
-#             while step < self.num_batches:
-            while step < 3:
+            while step < self.num_batches:
+#             while step < 3:
                 # reset requires_grad to be trainable for all Ds
                 # self.set_requires_grad_value(netsD, True)
 
@@ -219,12 +212,20 @@ class condGANTrainer(object):
                 # backward and update parameters
                 errG.backward()
                 optimizerG.step()
-                G_logs += 'errG: %.2f ' % (errG.data)
+                
+                #not update G this time
+#                 for p, avg_p in zip(netG.parameters(), avg_param_G):
+#                     avg_p.mul_(0.999).add_(0.001, p.data)
 
+                G_logs += 'errG: %.2f ' % (errG.data)
+                
                 if gen_iterations % 100 == 0:
                     print(D_logs + '\n' + G_logs)
                 # save images
-#                 if gen_iterations % 1000 == 0:
+#                 if gen_iterations  == 1:
+                if gen_iterations % 1000 == 0:
+                    self.save_singleimages(data,z_code,netG, '../output',
+                          'test',gen_iterations)
 #                     backup_para = copy_G_params(netG)
 #                     load_params(netG, avg_param_G)
 #                     self.save_img_results(netG, fixed_noise, sent_emb,
@@ -244,10 +245,51 @@ class condGANTrainer(object):
                      errD.item(), errG.item(),
                      end_t - start_t))
 
-#             if epoch % cfg.TRAIN.SNAPSHOT_INTERVAL == 0:  # and epoch != 0:
-#                 self.save_model(netG, avg_param_G, netsD, epoch)
+            if epoch % cfg.TRAIN.SNAPSHOT_INTERVAL == 0 and epoch != 0:
+                self.save_model(netG, avg_param_G, netD, epoch)
 
-#         self.save_model(netG, avg_param_G, netsD, self.max_epoch)
+        self.save_model(netG, avg_param_G, netD, self.max_epoch)
+
+    def save_singleimages(self,data,z_code,netG, save_dir,
+                          split_dir,gen_iterations):
+
+        real_imgs, text, _, _, keys = prepare_data(data)
+    #         real_imgs = real_imgs[-1]
+        fake_imgs, _, _ = netG(text,z_code)
+        real_imgs = real_imgs[-1]
+        for i in range(fake_imgs.size(0)):
+            s_tmp = '%s/single_samples/%s/gen%s/' %\
+                (save_dir, split_dir, gen_iterations//1000)
+            folder = s_tmp[:s_tmp.rfind('/')]
+            if not os.path.isdir(folder):
+                print('Make a new folder: ', folder)
+                mkdir_p(folder)
+
+            key = keys[i].replace('.','_')
+            key = key.replace('/' , '_')
+            tokens = '_'.join([self.tokenizer.convert_ids_to_tokens([w.item()])[0] for w in text[i]])
+            fullpath_fake = '%s_%s_fake.jpg' % (s_tmp, tokens)
+            fullpath_real = '%s_%s_real.jpg' % (s_tmp, tokens)
+
+
+            # range from [-1, 1] to [0, 1]
+            # img = (images[i] + 1.0) / 2
+            img = fake_imgs[i].add(1).div(2).mul(255).clamp(0, 255).byte()
+            # range from [0, 1] to [0, 255]
+            ndarr = img.permute(1, 2, 0).data.cpu().numpy()
+            im = Image.fromarray(ndarr)
+            im.save(fullpath_fake)
+
+            img2 = real_imgs[i].add(1).div(2).mul(255).clamp(0, 255).byte()
+            # range from [0, 1] to [0, 255]
+            ndarr = img2.permute(1, 2, 0).data.cpu().numpy()
+            im2 = Image.fromarray(ndarr)
+            im2.save(fullpath_real)
+        print('image saved')
+
+
+
+
 
 #     def save_singleimages(self, images, filenames, save_dir,
 #                           split_dir, sentenceID=0):
