@@ -16,7 +16,7 @@ from miscc.utils import weights_init, load_params, copy_G_params
 # from model import D_NET, G_NET,IMAGE_ENCODER,BERT_EMBEDDING(
 from model import *
 from datasets import prepare_data
-from miscc.losses import sent_loss,g_loss,d_loss
+from miscc.losses import sent_loss, g_loss, d_loss, g_loss_wgan, d_loss_wgan
 # from miscc.losses import words_loss
 # from miscc.losses import discriminator_loss, generator_loss, KL_loss
 import os
@@ -90,7 +90,7 @@ class condGANTrainer(object):
 
         return real_labels, fake_labels, match_labels
 
-    def save_model(self, netG, avg_param_G, netsD, epoch):
+    def save_model(self, netG, avg_param_G, netD, epoch):
         backup_para = copy_G_params(netG)
         load_params(netG, avg_param_G)
         torch.save(netG.state_dict(),
@@ -155,10 +155,11 @@ class condGANTrainer(object):
         real_labels, fake_labels, match_labels = self.prepare_labels()
 
         batch_size = self.batch_size
-        z_code = torch.rand(batch_size, cfg.Z_DIM)
+        noise = Variable(torch.FloatTensor(batch_size, cfg.Z_DIM))
+        fixed_noise = Variable(torch.FloatTensor(batch_size, cfg.Z_DIM).normal_(0, 1))
         
         if cfg.CUDA:
-            z_code.cuda()
+            noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
 
         gen_iterations = 0
         # gen_iterations = start_epoch * self.num_batches
@@ -182,50 +183,50 @@ class condGANTrainer(object):
                 #######################################################
                 # (2) Generate fake images
                 ######################################################
-                
-                fake_imgs, words_embs, sent_emb = netG(text,z_code)
-                words_embs, sent_emb = words_embs.detach(), sent_emb.detach()
+                noise.data.normal_(0, 1)
+                fake_imgs, words_embs, sent_emb = netG(text, noise)
+                fake_imgs, words_embs, sent_emb = fake_imgs.detach(), words_embs.detach(), sent_emb.detach()
                 #######################################################
                 # (3) Update D network
                 ######################################################
                 errD = 0
                 D_logs = ''
                 netD.zero_grad()
-                errD = d_loss(netD, real_imgs, fake_imgs,sent_emb, real_labels, fake_labels)
+                errD = d_loss_wgan(netD, real_imgs, fake_imgs,sent_emb)
                 # backward and update parameters
                 errD.backward()
                 optimizersD.step()
                 D_logs += 'errD: %.2f ' % (errD.data)
+                step += 1
 
                 #######################################################
                 # (4) Update G network: maximize log(D(G(z)))
                 ######################################################
                 # compute total loss for training G
-                step += 1
-                gen_iterations += 1
-                errG = 0
-                G_logs = ''
-                # do not need to compute gradient for Ds
-                # self.set_requires_grad_value(netsD, False)
-                netG.zero_grad()
-                errG = g_loss(netD, image_encoder, fake_imgs, real_labels, sent_emb, match_labels)
-                # backward and update parameters
-                errG.backward()
-                optimizerG.step()
-                
+                if step % cfg.TRAIN.CRITIC_ITER == 0:
+                    gen_iterations += 1
+                    errG = 0
+                    G_logs = ''
+                    # do not need to compute gradient for Ds
+                    # self.set_requires_grad_value(netsD, False)
+                    netG.zero_grad()
+                    errG = g_loss_wgan(netD, image_encoder, fake_imgs, sent_emb, match_labels)
+                    # backward and update parameters
+                    errG.backward()
+                    optimizerG.step()
+                    G_logs += 'errG: %.2f ' % (errG.data)
                 #not update G this time
 #                 for p, avg_p in zip(netG.parameters(), avg_param_G):
 #                     avg_p.mul_(0.999).add_(0.001, p.data)
 
-                G_logs += 'errG: %.2f ' % (errG.data)
-                
-                if gen_iterations % 100 == 0:
+
+                if step % 100 == 0:
                     print(D_logs + '\n' + G_logs)
+
                 # save images
-#                 if gen_iterations  == 1:
-                if gen_iterations % 1000 == 0:
-                    self.save_singleimages(data,z_code,netG, '../output',
-                          'test',gen_iterations)
+                if gen_iterations % 100 == 0:
+                    self.save_singleimages(data, fixed_noise, netG, '../output',
+                          'test', gen_iterations)
 #                     backup_para = copy_G_params(netG)
 #                     load_params(netG, avg_param_G)
 #                     self.save_img_results(netG, fixed_noise, sent_emb,

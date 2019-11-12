@@ -18,28 +18,56 @@ __C.CUDA = False
 __C.WORKERS = 4
 
 
-__C.E_DIM = 768          # Word embedding dimension
+
+
+__C.E_DIM = 256          # Sentence embedding dimension
+__C.WORD_DIM = 768          # Word embedding dimension
 __C.C_DIM = 128          # Condition c_code dimension
 __C.Z_DIM = 128          # Random z_code dimension
 __C.W_DIM = 256          # Latent w_code dimension
 __C.A_DIM = 256          # Attention a_code dimension
-__C.RESOLUTION = 256     # Target image's resolution
+
+# Text Embedding
+__C.TEXT = edict()
+__C.TEXT.PRETRAINED_MODEL = 'bert-base-uncased'
+__C.TEXT.MAX_LENGTH = 18
+# __C.TEXT.CAPTIONS_PER_IMAGE = 10
+# __C.TEXT.EMBEDDING_DIM = 256
+
+
+## Mapping
+__C.M = edict()
+__C.M.LAYERS = 8
+__C.M.USE_NORM = True
+
+
+## GAN
+__C.GAN = edict()
+__C.GAN.RESOLUTION_INIT = 8
+__C.GAN.RESOLUTION = 256     # Target image's resolution
+__C.GAN.USE_ATTENTION = True
+__C.GAN.USE_NOISE = True
+__C.GAN.USE_PIXEL_NORM = False
+__C.GAN.USE_INSTANCE_NORM = True
+__C.GAN.USE_TRUNCATION = True
+
+
+## LOSS
+__C.LOSS = edict()
+__C.LOSS.WGAN = True
+__C.LOSS.WGAN_LAMBDA = 10
+
 
 __C.RNN_TYPE = 'LSTM'   # 'GRU'
 __C.B_VALIDATION = False
 
-__C.TREE = edict()
-__C.TREE.BRANCH_NUM = 3
-__C.TREE.BASE_SIZE = 64
-
-## MAPPING
-__C.M = edict()
-__C.M.LAYERS = 6
 
 # Training options
 __C.TRAIN = edict()
 __C.TRAIN.BATCH_SIZE = 8
 __C.TRAIN.MAX_EPOCH = 100
+__C.TRAIN.CRITIC_ITER = 5
+
 __C.TRAIN.SNAPSHOT_INTERVAL = 10
 __C.TRAIN.DISCRIMINATOR_LR = 1e-4
 __C.TRAIN.GENERATOR_LR = 2e-4
@@ -59,24 +87,8 @@ __C.TRAIN.SMOOTH.LAMBDA = 1.0
 __C.TRAIN.LAMBDA = 0.5
 __C.TRAIN.GAMMA3 = 1e-8
 
-# Modal options
-__C.GAN = edict()
-__C.GAN.DF_DIM = 64
-__C.GAN.GF_DIM = 128
-__C.GAN.Z_DIM = 100
-__C.GAN.CONDITION_DIM = 100
-__C.GAN.R_NUM = 2
-__C.GAN.B_ATTENTION = True
-__C.GAN.B_DCGAN = False
 
 
-__C.TEXT = edict()
-__C.TEXT.CAPTIONS_PER_IMAGE = 10
-__C.TEXT.EMBEDDING_DIM = 256
-__C.TEXT.WORDS_NUM = 18
-
-__C.TEXT.PRETRAINED_MODEL = 'bert-base-uncased'
-__C.TEXT.MAX_LENGTH = 18
 
 
 def _merge_a_into_b(a, b):
