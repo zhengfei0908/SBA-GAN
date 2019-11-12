@@ -184,7 +184,7 @@ class condGANTrainer(object):
                 # (2) Generate fake images
                 ######################################################
                 noise.data.normal_(0, 1)
-                fake_imgs, words_embs, sent_emb = netG(text, noise)
+                fake_imgs, words_embs, sent_emb, _, _ = netG(text, noise)
                 fake_imgs, words_embs, sent_emb = fake_imgs.detach(), words_embs.detach(), sent_emb.detach()
                 #######################################################
                 # (3) Update D network
@@ -215,18 +215,19 @@ class condGANTrainer(object):
                     errG.backward()
                     optimizerG.step()
                     G_logs += 'errG: %.2f ' % (errG.data)
+                    
+                    # save images
+                    if gen_iterations % 100 == 0:
+                        self.save_singleimages(data, fixed_noise, netG, '../output','test', gen_iterations)
                 #not update G this time
 #                 for p, avg_p in zip(netG.parameters(), avg_param_G):
 #                     avg_p.mul_(0.999).add_(0.001, p.data)
 
 
                 if step % 100 == 0:
-                    print(D_logs + '\n' + G_logs)
+                    print(D_logs + ' ' + G_logs)
 
-                # save images
-                if gen_iterations % 100 == 0:
-                    self.save_singleimages(data, fixed_noise, netG, '../output',
-                          'test', gen_iterations)
+                
 #                     backup_para = copy_G_params(netG)
 #                     load_params(netG, avg_param_G)
 #                     self.save_img_results(netG, fixed_noise, sent_emb,
@@ -256,7 +257,7 @@ class condGANTrainer(object):
 
         real_imgs, text, _, _, keys = prepare_data(data)
     #         real_imgs = real_imgs[-1]
-        fake_imgs, _, _ = netG(text,z_code)
+        fake_imgs, _, _,_,_ = netG(text,z_code)
         real_imgs = real_imgs[-1]
         for i in range(fake_imgs.size(0)):
             s_tmp = '%s/single_samples/%s/gen%s/' %\

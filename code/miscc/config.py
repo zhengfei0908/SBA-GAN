@@ -31,8 +31,9 @@ __C.A_DIM = 256          # Attention a_code dimension
 __C.TEXT = edict()
 __C.TEXT.PRETRAINED_MODEL = 'bert-base-uncased'
 __C.TEXT.MAX_LENGTH = 18
-# __C.TEXT.CAPTIONS_PER_IMAGE = 10
-# __C.TEXT.EMBEDDING_DIM = 256
+__C.TEXT.CAPTIONS_PER_IMAGE = 10
+__C.TEXT.EMBEDDING_DIM = 256
+__C.TEXT.WORDS_NUM = 18
 
 
 ## Mapping
@@ -50,6 +51,14 @@ __C.GAN.USE_NOISE = True
 __C.GAN.USE_PIXEL_NORM = False
 __C.GAN.USE_INSTANCE_NORM = True
 __C.GAN.USE_TRUNCATION = True
+
+__C.GAN.DF_DIM = 64
+__C.GAN.GF_DIM = 128
+__C.GAN.Z_DIM = 100
+__C.GAN.CONDITION_DIM = 100
+__C.GAN.R_NUM = 2
+__C.GAN.B_ATTENTION = True
+__C.GAN.B_DCGAN = False
 
 
 ## LOSS
@@ -78,6 +87,7 @@ __C.TRAIN.NET_E = ''
 __C.TRAIN.NET_G = ''
 __C.TRAIN.B_NET_D = True
 
+
 __C.TRAIN.SMOOTH = edict()
 __C.TRAIN.SMOOTH.GAMMA1 = 5.0
 __C.TRAIN.SMOOTH.GAMMA3 = 10.0
@@ -87,6 +97,10 @@ __C.TRAIN.SMOOTH.LAMBDA = 1.0
 __C.TRAIN.LAMBDA = 0.5
 __C.TRAIN.GAMMA3 = 1e-8
 
+## Tree
+__C.TREE = edict()
+__C.TREE.BRANCH_NUM = 3
+__C.TREE.BASE_SIZE = 64
 
 
 
