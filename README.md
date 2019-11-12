@@ -22,7 +22,7 @@ Xiaoxi Zhao: dataloader, metrics and util functions
 
 ## Results:
 
-Generated images: https://drive.google.com/drive/folders/11J_XfP8IE53kUUfCL9ZGYbF5ZRvPyejj
+Generated images: https://drive.google.com/open?id=11J_XfP8IE53kUUfCL9ZGYbF5ZRvPyejj
 
 ## Timeline
 Proposal: Oct. 15th 11:30-12:00am
