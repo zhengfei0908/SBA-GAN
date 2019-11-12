@@ -204,7 +204,6 @@ class condGANTrainer(object):
                 ######################################################
                 # compute total loss for training G
                 if step % cfg.TRAIN.CRITIC_ITER == 0:
-                    gen_iterations += 1
                     errG = 0
                     G_logs = ''
                     # do not need to compute gradient for Ds
@@ -215,6 +214,7 @@ class condGANTrainer(object):
                     errG.backward()
                     optimizerG.step()
                     G_logs += 'errG: %.2f ' % (errG.data)
+                    gen_iterations += 1
                     
                     # save images
                     if gen_iterations % 100 == 0:
@@ -225,7 +225,7 @@ class condGANTrainer(object):
 
 
                 if step % 100 == 0:
-                    print(D_logs + ' ' + G_logs)
+                    print('''step: %d  D_logs: %.2f  G_logs: %.2f''' % (step, D_logs, G_logs))
 
                 
 #                     backup_para = copy_G_params(netG)

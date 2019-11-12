@@ -348,7 +348,7 @@ class G_NET(nn.Module):
                                         ))
 
         ## to image
-        self.torgb = nn.ConvTranspose2d(self.nf(self.resolution_log2), out_channels, kernel_size=3, stride=1, padding=1)
+        self.torgb = nn.Conv2d(self.nf(self.resolution_log2), out_channels, kernel_size=1, stride=1)
         self.tanh = nn.Tanh()
 
     def forward(self, text, z_code):
