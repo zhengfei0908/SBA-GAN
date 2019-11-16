@@ -387,15 +387,15 @@ class Generator(nn.Module):
 
         self.progression = nn.ModuleList(
             [
-                StyledConvBlock(256, 512, 3, 1, initial=True),  # 4
+                StyledConvBlock(384, 512, 3, 1, initial=True),  # 4
                 StyledConvBlock(512, 512, 3, 1, upsample=True),  # 8
-                StyledConvBlock(512, 512, 3, 1, upsample=True),  # 16
-                StyledConvBlock(512, 512, 3, 1, upsample=True),  # 32
-                StyledConvBlock(512, 256, 3, 1, upsample=True),  # 64
-                StyledConvBlock(256, 128, 3, 1, upsample=True, fused=fused),  # 128
-                StyledConvBlock(128, 64, 3, 1, upsample=True, fused=fused),  # 256
-                StyledConvBlock(64, 32, 3, 1, upsample=True, fused=fused),  # 512
-                StyledConvBlock(32, 16, 3, 1, upsample=True, fused=fused),  # 1024
+                StyledConvBlock(512, 256, 3, 1, upsample=True),  # 16
+                StyledConvBlock(256, 128, 3, 1, upsample=True),  # 32
+                StyledConvBlock(128, 64, 3, 1, upsample=True),  # 64
+                StyledConvBlock(64, 32, 3, 1, upsample=True, fused=fused),  # 128
+                StyledConvBlock(32, 16, 3, 1, upsample=True, fused=fused),  # 256
+                #StyledConvBlock(64, 32, 3, 1, upsample=True, fused=fused),  # 512
+                #StyledConvBlock(32, 16, 3, 1, upsample=True, fused=fused),  # 1024
             ]
         )
 
@@ -403,8 +403,8 @@ class Generator(nn.Module):
             [
                 EqualConv2d(512, 3, 1),
                 EqualConv2d(512, 3, 1),
-                EqualConv2d(512, 3, 1),
-                EqualConv2d(512, 3, 1),
+                #EqualConv2d(512, 3, 1),
+                #EqualConv2d(512, 3, 1),
                 EqualConv2d(256, 3, 1),
                 EqualConv2d(128, 3, 1),
                 EqualConv2d(64, 3, 1),
@@ -523,17 +523,19 @@ class Discriminator(nn.Module):
 
         self.progression = nn.ModuleList(
             [
-                ConvBlock(16, 32, 3, 1, downsample=True, fused=fused),  # 512
-                ConvBlock(32, 64, 3, 1, downsample=True, fused=fused),  # 256
-                ConvBlock(64, 128, 3, 1, downsample=True, fused=fused),  # 128
-                ConvBlock(128, 256, 3, 1, downsample=True, fused=fused),  # 64
-                ConvBlock(256, 512, 3, 1, downsample=True),  # 32
-                ConvBlock(512, 512, 3, 1, downsample=True),  # 16
-                ConvBlock(512, 512, 3, 1, downsample=True),  # 8
+                ConvBlock(16, 32, 3, 1, downsample=True, fused=fused),  # 128
+                ConvBlock(32, 64, 3, 1, downsample=True, fused=fused),  # 64
+                ConvBlock(64, 128, 3, 1, downsample=True, fused=fused),  # 32
+                ConvBlock(128, 256, 3, 1, downsample=True, fused=fused),  # 16
+                ConvBlock(256, 512, 3, 1, downsample=True),  # 8
+                #ConvBlock(512, 512, 3, 1, downsample=True),  # 16
+                #ConvBlock(512, 512, 3, 1, downsample=True),  # 8
                 ConvBlock(512, 512, 3, 1, downsample=True),  # 4
-                ConvBlock(513, 512, 3, 1, 4, 0),
+                # ConvBlock(513+128, 512, 3, 1, 4, 0),
             ]
         )
+        self.uncond_conv = ConvBlock(513, 512, 3, 1, 4, 0)
+        self.cond_conv = ConvBlock(513+128, 512, 3, 1, 4, 0)
 
         def make_from_rgb(out_channel):
             if from_rgb_activate:
@@ -550,21 +552,22 @@ class Discriminator(nn.Module):
                 make_from_rgb(128),
                 make_from_rgb(256),
                 make_from_rgb(512),
-                make_from_rgb(512),
-                make_from_rgb(512),
+                #make_from_rgb(512),
+                #make_from_rgb(512),
                 make_from_rgb(512),
             ]
         )
 
         # self.blur = Blur()
 
-        self.n_layer = len(self.progression)
+        self.n_layer = len(self.from_rgb)
 
-        self.linear = EqualLinear(512, 1)
-        self.cond_linear = EqualLinear(768, 1)
+        self.uncond_linear = EqualLinear(512, 1)
+        self.cond_linear = EqualLinear(512, 1)
         
 
     def forward(self, input, sent_emb=None, step=0, alpha=-1):
+        cond_out = None
         for i in range(step, -1, -1):
             index = self.n_layer - i - 1
 
@@ -575,9 +578,14 @@ class Discriminator(nn.Module):
                 out_std = torch.sqrt(out.var(0, unbiased=False) + 1e-8)
                 mean_std = out_std.mean()
                 mean_std = mean_std.expand(out.size(0), 1, 4, 4)
-                out = torch.cat([out, mean_std], 1)
-
-            out = self.progression[index](out)
+                if sent_emb is not None:
+                    sent_emb = sent_emb.view(out.size(0),-1,1,1).repeat(1, 1, 4, 4)
+                    cond_out = torch.cat([out, mean_std, sent_emb], 1)
+                    cond_out = self.cond_conv(cond_out)
+                uncond_out = torch.cat([out, mean_std], 1)
+                uncond_out = self.uncond_conv(uncond_out)
+            else:
+                out = self.progression[index](out)
 
             if i > 0:
                 if i == step and 0 <= alpha < 1:
@@ -586,15 +594,17 @@ class Discriminator(nn.Module):
 
                     out = (1 - alpha) * skip_rgb + alpha * out
 
-        out = out.squeeze(2).squeeze(2)
-        cond_out = None
-        if sent_emb is not None:
-            cond_out = torch.cat([out, sent_emb], dim=1)
+        uncond_out = uncond_out.squeeze(2).squeeze(2)
+        uncond_out = self.uncond_linear(uncond_out)
+        if cond_out is not None:
+            cond_out = cond_out.squeeze(2).squeeze(2)
             cond_out = self.cond_linear(cond_out)
+#         if sent_emb is not None:
+#             cond_out = torch.cat([out, sent_emb], dim=1)
+#             cond_out = self.cond_linear(cond_out)
         # print(input.size(), out.size(), step)
-        out = self.linear(out)
         
-        return out, cond_out
+        return uncond_out, cond_out
 
 
 class BertEmbedding(nn.Module):
@@ -649,8 +659,11 @@ class TextProcess(nn.Module):
         super(TextProcess, self).__init__()
         self.bert_embedding = BertEmbedding(max_length=max_length, embedding_dim=embedding_dim)
         self.ca_net = CaNet(embedding_dim=embedding_dim, condition_dim=condition_dim)
-    
+        self.norm = PixelNorm()
+        
     def forward(self, input_ids):
+        ####Todo: words normalization####
         words_embs, sent_emb = self.bert_embedding(input_ids)
+        sent_emb = self.norm(sent_emb)
         c_code, mu, log_var = self.ca_net(sent_emb)
         return c_code, sent_emb, words_embs, mu, log_var

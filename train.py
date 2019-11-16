@@ -56,7 +56,7 @@ def train(args, dataset, text_process, generator, discriminator):
     adjust_lr(g_optimizer, args.lr.get(resolution, 0.001))
     adjust_lr(d_optimizer, args.lr.get(resolution, 0.001))
 
-    pbar = tqdm(range(300_000))
+    pbar = tqdm(range(300_000), position=0, leave=True)
     
     
     requires_grad(text_process, False)
@@ -65,6 +65,7 @@ def train(args, dataset, text_process, generator, discriminator):
 
     disc_loss_uncond_val = 0
     disc_loss_cond_val = 0
+    disc_loss_mismatch_val = 0
     gen_loss_uncond_val = 0
     gen_loss_cond_val = 0
     grad_loss_val = 0
@@ -120,12 +121,10 @@ def train(args, dataset, text_process, generator, discriminator):
 
         try:
             real_image, caption = next(data_loader)
-            #real_image = next(data_loader)
 
         except (OSError, StopIteration):
             data_loader = iter(loader)
             real_image, caption = next(data_loader)
-            #real_image = next(data_loader)
 
         used_sample += real_image.shape[0]
 
@@ -136,10 +135,12 @@ def train(args, dataset, text_process, generator, discriminator):
 
         if args.loss == 'wgan-gp':
             real_predict, cond_real_predict = discriminator(real_image, sent_emb, step=step, alpha=alpha)
-            real_predict = real_predict.mean() / 2. - 0.001 * (real_predict ** 2).mean() / 2.
-            #cond_real_predict = cond_real_predict.mean() / 2. - 0.001 * (cond_real_predict ** 2).mean() / 2.
+            #real_predict = real_predict.mean() / 2. - 0.001 * (real_predict ** 2).mean() / 2.
+            cond_real_predict = cond_real_predict.mean() - 0.001 * (cond_real_predict ** 2).mean()
+            #cond_real_predict = cond_real_predict / 100.
+            
             #(-real_predict-cond_real_predict).backward(retain_graph=True)
-            (-real_predict).backward(retain_graph=True)
+            (-cond_real_predict).backward(retain_graph=True)
         
         ####Todo: fit for condition gan###
         elif args.loss == 'r1':
@@ -178,29 +179,42 @@ def train(args, dataset, text_process, generator, discriminator):
 
         fake_image = generator(gen_in1, c_code, step=step, alpha=alpha)
         fake_predict, cond_fake_predict = discriminator(fake_image, sent_emb, step=step, alpha=alpha)
+        #_, mismatch_predict = discriminator(real_image[:(b_size-1)], sent_emb[1:b_size], step=step, alpha=alpha)
 
         if args.loss == 'wgan-gp':
-            fake_predict = fake_predict.mean() / 2.
-            #cond_fake_predict = cond_fake_predict.mean() / 2.
-            #(fake_predict+cond_fake_predict).backward(retain_graph=True)
-            (fake_predict).backward(retain_graph=True)
+            #fake_predict = fake_predict.mean() / 3.
+            cond_fake_predict = cond_fake_predict.mean()
+            #cond_fake_predict = cond_fake_predict / 100.
+            #mismatch_predict = mismatch_predict.mean() / 3.
+            #mismatch_predict = mismatch_predict / 100.
+            #(fake_predict+cond_fake_predict+mismatch_predict).backward(retain_graph=True)
+            (cond_fake_predict).backward(retain_graph=True)
 
             eps = torch.rand(b_size, 1, 1, 1).cuda()
             x_hat = eps * real_image.data + (1 - eps) * fake_image.data
             x_hat.requires_grad = True
-            hat_predict,_ = discriminator(x_hat, step=step, alpha=alpha)
-            grad_x_hat = grad(
-                outputs=hat_predict.sum(), inputs=x_hat, create_graph=True
+            hat_predict, cond_hat_predict = discriminator(x_hat, sent_emb, step=step, alpha=alpha)
+#             grad_x_hat = grad(
+#                 outputs=hat_predict.sum(), inputs=x_hat, create_graph=True
+#             )[0]
+            cond_grad_x_hat = grad(
+                outputs=cond_hat_predict.sum(), inputs=x_hat, create_graph=True
             )[0]
-            grad_penalty = (
-                (grad_x_hat.view(grad_x_hat.size(0), -1).norm(2, dim=1) - 1) ** 2
+#             grad_penalty = (
+#                 (grad_x_hat.view(grad_x_hat.size(0), -1).norm(2, dim=1) - 1) ** 2
+#             ).mean()
+            cond_grad_penalty = (
+                (cond_grad_x_hat.view(cond_grad_x_hat.size(0), -1).norm(2, dim=1) - 1) ** 2
             ).mean()
-            grad_penalty = 10 * grad_penalty
-            grad_penalty.backward()
+#             grad_penalty = 10 * grad_penalty
+            cond_grad_penalty = 10 * cond_grad_penalty
+#             grad_penalty.backward()
+            cond_grad_penalty.backward()
             if (i+1)%10 == 0:
-                grad_loss_val = grad_penalty.item()
-                disc_loss_uncond_val = (-real_predict + fake_predict).item()
-                #disc_loss_cond_val = (-cond_real_predict + cond_fake_predict).item()
+                grad_loss_val = cond_grad_penalty.item()
+                #disc_loss_uncond_val = (-real_predict + fake_predict).item()
+                disc_loss_cond_val = (-cond_real_predict + cond_fake_predict).item()
+                #disc_loss_mismatch_val = mismatch_predict.item()
                 #disc_loss_val = (-real_predict-cond_real_predict+fake_predict +cond_fake_predict).item() / 2.0
 
         ####Todo: fit for condition gan###
@@ -213,10 +227,14 @@ def train(args, dataset, text_process, generator, discriminator):
         d_optimizer.step()
 
         if (i + 1) % n_critic == 0:
+            text_process.zero_grad()
             generator.zero_grad()
             
-            requires_grad(text_process.module.bert_embedding.fc, True)
-            requires_grad(text_process.module.ca_net, True)
+            if resolution <= 2:
+                requires_grad(text_process, True)
+            else:
+                requires_grad(text_process.module.bert_embedding.fc, True)
+                requires_grad(text_process.module.ca_net, True)
             requires_grad(generator, True)
             requires_grad(discriminator, False)
 
@@ -225,18 +243,19 @@ def train(args, dataset, text_process, generator, discriminator):
             predict, cond_predict = discriminator(fake_image, sent_emb, step=step, alpha=alpha)
 
             if args.loss == 'wgan-gp':
-                uncond_loss = (-predict).mean() / 2.
-                #cond_loss = (-cond_predict).mean() / 2.
+                #uncond_loss = (-predict).mean() / 2.
+                cond_loss = (-cond_predict).mean()
+                #cond_loss = cond_loss / 100.
                 #(uncond_loss + cond_loss).backward(retain_graph=True)
-                (uncond_loss).backward(retain_graph=True)
+                (cond_loss).backward(retain_graph=True)
 
             elif args.loss == 'r1':
                 loss = F.softplus(-predict).mean()
 
             
             if (i+1) % 10 == 0:
-                gen_loss_uncond_val = uncond_loss.item()
-                #gen_loss_cond_val = cond_loss.item()
+                #gen_loss_uncond_val = uncond_loss.item()
+                gen_loss_cond_val = cond_loss.item()
 
             g_optimizer.step()
             accumulate(g_running, generator.module)
@@ -273,9 +292,9 @@ def train(args, dataset, text_process, generator, discriminator):
 
         state_msg = (
             f'Size: {4 * 2 ** step};'
-            f'G_uncond: {gen_loss_uncond_val:.3f}; G_cond: {gen_loss_cond_val:.3f};'
-            f'D_uncond: {disc_loss_uncond_val:.3f}; D_cond: {disc_loss_cond_val:.3f};'
-            f' Grad: {grad_loss_val:.3f}; Alpha: {alpha:.5f}'
+            f'G_u: {gen_loss_uncond_val:.3f}; G_c: {gen_loss_cond_val:.2f};'
+            f'D_u: {disc_loss_uncond_val:.3f}; D_c: {disc_loss_cond_val:.2f}; D_m: {disc_loss_mismatch_val:.2f};'
+            f' Grad: {grad_loss_val:.3f}; Alpha: {alpha:.4f};'
         )
 
         pbar.set_description(state_msg)
@@ -294,7 +313,7 @@ if __name__ == '__main__':
         default=320_000,
         help='number of samples used for each training phases',
     )
-    parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
+    parser.add_argument('--lr', default=0.0002, type=float, help='learning rate')
     parser.add_argument('--sched', action='store_true', help='use lr scheduling')
     parser.add_argument('--init_size', default=4, type=int, help='initial image size')
     parser.add_argument('--max_size', default=256, type=int, help='max image size')
@@ -320,7 +339,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    text_process = nn.DataParallel(TextProcess(max_length=18, embedding_dim=256, condition_dim=256)).cuda()
+    text_process = nn.DataParallel(TextProcess(max_length=18, embedding_dim=128, condition_dim=128)).cuda()
     generator = nn.DataParallel(StyledGenerator(code_size)).cuda()
     discriminator = nn.DataParallel(
         Discriminator(from_rgb_activate=not args.no_from_rgb_activate)
@@ -329,7 +348,8 @@ if __name__ == '__main__':
     g_running.train(False)
 
     g_optimizer = optim.Adam(
-        generator.module.generator.parameters(), lr=args.lr, betas=(0.0, 0.99)
+        list(generator.module.generator.parameters()) + list(text_process.parameters()),
+        lr=args.lr, betas=(0.0, 0.99)
     )
     g_optimizer.add_param_group(
         {
