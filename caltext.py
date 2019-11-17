@@ -9,7 +9,7 @@ from pytorch_pretrained_bert import BertTokenizer
 
 
 class MultiResolutionDataset(Dataset):
-    def __init__(self, path, transform, resolution=4, max_length=24):
+    def __init__(self, path):
         self.env = lmdb.open(
             path,
             max_readers=32,
@@ -25,9 +25,7 @@ class MultiResolutionDataset(Dataset):
         with self.env.begin(write=False) as txn:
             self.length = int(txn.get('length'.encode('utf-8')).decode('utf-8'))
 
-        self.resolution = resolution
         self.max_length = max_length
-        self.transform = transform
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     def __len__(self):
@@ -35,8 +33,6 @@ class MultiResolutionDataset(Dataset):
 
     def __getitem__(self, index):
         with self.env.begin(write=False) as txn:
-            img_key = f'{self.resolution}-{str(index).zfill(5)}'.encode('utf-8')
-            img_bytes = txn.get(img_key)
             for k in range(3):
                 i = random.randint(0, 5)
                 txt_key = f'txt-{i}-{str(index).zfill(5)}'.encode('utf-8')
@@ -46,9 +42,6 @@ class MultiResolutionDataset(Dataset):
             else:
                 txt_bytes = '[CLS] [SEP]'.encode('utf-8')
 
-        buffer = BytesIO(img_bytes)
-        img = Image.open(buffer)
-        img = self.transform(img)
         
         ####Todo: text preprocessing, stop words####
         txt = txt_bytes.decode('utf-8')
@@ -57,4 +50,4 @@ class MultiResolutionDataset(Dataset):
         fixed_tokens = torch.zeros(self.max_length, dtype=torch.int64)
         fixed_tokens[:min(len(tokens), self.max_length)] = torch.LongTensor(tokens[:min(len(tokens), self.max_length)])
         
-        return img, fixed_tokens
+        return fixed_tokens

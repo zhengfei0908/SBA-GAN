@@ -301,14 +301,12 @@ class ConstantInput(nn.Module):
         super().__init__()
         
         self.size = size
-        self.const = nn.Parameter(torch.randn(1, channel, size, size))
+        #self.const = nn.Parameter(torch.randn(1, channel, size, size))
 
-    def forward(self, input, c_code=None):
+    def forward(self, input, c_code):
         batch = input.shape[0]
-        out = self.const.repeat(batch, 1, 1, 1)
-        if c_code is not None:
-            c_code = c_code.view(batch,-1,1,1).repeat(1, 1, self.size, self.size)
-            out = torch.cat([out, c_code], dim=1)
+        #out = self.const.repeat(batch, 1, 1, 1)
+        out = c_code.view(batch,-1,1,1).repeat(1, 1, self.size, self.size)
         return out
 
 
@@ -387,15 +385,13 @@ class Generator(nn.Module):
 
         self.progression = nn.ModuleList(
             [
-                StyledConvBlock(384, 512, 3, 1, initial=True),  # 4
+                StyledConvBlock(512, 512, 3, 1, initial=True),  # 4
                 StyledConvBlock(512, 512, 3, 1, upsample=True),  # 8
                 StyledConvBlock(512, 256, 3, 1, upsample=True),  # 16
-                StyledConvBlock(256, 128, 3, 1, upsample=True),  # 32
-                StyledConvBlock(128, 64, 3, 1, upsample=True),  # 64
+                StyledConvBlock(256, 128, 3, 1, upsample=True, fused=fused),  # 32
+                StyledConvBlock(128, 64, 3, 1, upsample=True, fused=fused),  # 64
                 StyledConvBlock(64, 32, 3, 1, upsample=True, fused=fused),  # 128
                 StyledConvBlock(32, 16, 3, 1, upsample=True, fused=fused),  # 256
-                #StyledConvBlock(64, 32, 3, 1, upsample=True, fused=fused),  # 512
-                #StyledConvBlock(32, 16, 3, 1, upsample=True, fused=fused),  # 1024
             ]
         )
 
@@ -403,8 +399,6 @@ class Generator(nn.Module):
             [
                 EqualConv2d(512, 3, 1),
                 EqualConv2d(512, 3, 1),
-                #EqualConv2d(512, 3, 1),
-                #EqualConv2d(512, 3, 1),
                 EqualConv2d(256, 3, 1),
                 EqualConv2d(128, 3, 1),
                 EqualConv2d(64, 3, 1),
@@ -462,7 +456,7 @@ class Generator(nn.Module):
 
 
 class StyledGenerator(nn.Module):
-    def __init__(self, code_dim=512, n_mlp=8):
+    def __init__(self, code_dim=512, n_mlp=6):
         super().__init__()
 
         self.generator = Generator(code_dim)
@@ -528,14 +522,10 @@ class Discriminator(nn.Module):
                 ConvBlock(64, 128, 3, 1, downsample=True, fused=fused),  # 32
                 ConvBlock(128, 256, 3, 1, downsample=True, fused=fused),  # 16
                 ConvBlock(256, 512, 3, 1, downsample=True),  # 8
-                #ConvBlock(512, 512, 3, 1, downsample=True),  # 16
-                #ConvBlock(512, 512, 3, 1, downsample=True),  # 8
                 ConvBlock(512, 512, 3, 1, downsample=True),  # 4
-                # ConvBlock(513+128, 512, 3, 1, 4, 0),
+                ConvBlock(513 + 512, 512, 3, 1, 4, 0),
             ]
         )
-        self.uncond_conv = ConvBlock(513, 512, 3, 1, 4, 0)
-        self.cond_conv = ConvBlock(513+128, 512, 3, 1, 4, 0)
 
         def make_from_rgb(out_channel):
             if from_rgb_activate:
@@ -552,8 +542,6 @@ class Discriminator(nn.Module):
                 make_from_rgb(128),
                 make_from_rgb(256),
                 make_from_rgb(512),
-                #make_from_rgb(512),
-                #make_from_rgb(512),
                 make_from_rgb(512),
             ]
         )
@@ -562,53 +550,41 @@ class Discriminator(nn.Module):
 
         self.n_layer = len(self.from_rgb)
 
-        self.uncond_linear = EqualLinear(512, 1)
-        self.cond_linear = EqualLinear(512, 1)
+        self.linear = EqualLinear(512, 1)
         
 
-    def forward(self, input, sent_emb=None, step=0, alpha=-1):
-        cond_out = None
+    def forward(self, input, sent_emb, step=0, alpha=-1):
         for i in range(step, -1, -1):
             index = self.n_layer - i - 1
 
             if i == step:
                 out = self.from_rgb[index](input)
-
+                
             if i == 0:
                 out_std = torch.sqrt(out.var(0, unbiased=False) + 1e-8)
                 mean_std = out_std.mean()
                 mean_std = mean_std.expand(out.size(0), 1, 4, 4)
-                if sent_emb is not None:
-                    sent_emb = sent_emb.view(out.size(0),-1,1,1).repeat(1, 1, 4, 4)
-                    cond_out = torch.cat([out, mean_std, sent_emb], 1)
-                    cond_out = self.cond_conv(cond_out)
-                uncond_out = torch.cat([out, mean_std], 1)
-                uncond_out = self.uncond_conv(uncond_out)
-            else:
-                out = self.progression[index](out)
+                sent_emb = sent_emb.view(out.size(0),-1,1,1).repeat(1, 1, 4, 4)
+                out = torch.cat([out, mean_std, sent_emb], 1)
 
+            out = self.progression[index](out)
+            
             if i > 0:
                 if i == step and 0 <= alpha < 1:
                     skip_rgb = F.avg_pool2d(input, 2)
                     skip_rgb = self.from_rgb[index + 1](skip_rgb)
 
                     out = (1 - alpha) * skip_rgb + alpha * out
-
-        uncond_out = uncond_out.squeeze(2).squeeze(2)
-        uncond_out = self.uncond_linear(uncond_out)
-        if cond_out is not None:
-            cond_out = cond_out.squeeze(2).squeeze(2)
-            cond_out = self.cond_linear(cond_out)
-#         if sent_emb is not None:
-#             cond_out = torch.cat([out, sent_emb], dim=1)
-#             cond_out = self.cond_linear(cond_out)
-        # print(input.size(), out.size(), step)
+                    
+            
+        out = out.squeeze(2).squeeze(2)
+        out = self.linear(out)
         
-        return uncond_out, cond_out
+        return out
 
 
 class BertEmbedding(nn.Module):
-    def __init__(self, max_length=18, embedding_dim=128):
+    def __init__(self, max_length=24, embedding_dim=256):
         super(BertEmbedding, self).__init__()
         self.max_length = max_length
         self.fc = nn.Linear(768, embedding_dim, bias = True)
@@ -638,7 +614,7 @@ class GLU(nn.Module):
         return x[:, :nc] * torch.sigmoid(x[:, nc:])
 
 class CaNet(nn.Module):
-    def __init__(self, embedding_dim=128, condition_dim=128):
+    def __init__(self, embedding_dim=256, condition_dim=256):
         super(CaNet, self).__init__()
         self.e_dim = embedding_dim
         self.c_dim = condition_dim
@@ -655,7 +631,7 @@ class CaNet(nn.Module):
         return eps.mul(std).add_(mu), mu, log_var
 
 class TextProcess(nn.Module):
-    def __init__(self, max_length=18, embedding_dim=128, condition_dim=128):
+    def __init__(self, max_length=24, embedding_dim=512, condition_dim=512):
         super(TextProcess, self).__init__()
         self.bert_embedding = BertEmbedding(max_length=max_length, embedding_dim=embedding_dim)
         self.ca_net = CaNet(embedding_dim=embedding_dim, condition_dim=condition_dim)
