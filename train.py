@@ -25,7 +25,7 @@ def requires_grad(model, flag=True):
         p.requires_grad = flag
 
 
-def accumulate(model1, model2, decay=0.999):
+def accumulate(model1, model2, decay=0.99):
     par1 = dict(model1.named_parameters())
     par2 = dict(model2.named_parameters())
 
@@ -99,8 +99,8 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
     
     data_loader = iter(loader)
 
-    adjust_lr(g_optimizer, args.lr.get(resolution, 0.0002))
-    adjust_lr(d_optimizer, args.lr.get(resolution, 0.0002))
+    adjust_lr(g_optimizer, args.lr.get(resolution, 0.001))
+    adjust_lr(d_optimizer, args.lr.get(resolution, 0.001))
 
     pbar = tqdm(range(300_000))
     
@@ -171,6 +171,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
                     'g_optimizer': g_optimizer.state_dict(),
                     'd_optimizer': d_optimizer.state_dict(),
                     'g_running': g_running.state_dict(),
+                    't_running': t_running.state_dict(),
                 },
                 os.path.join(args.out, f'checkpoint/train_step-{ckpt_step}.model')
             )
@@ -355,7 +356,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--phase',
         type=int,
-        default=320_000,
+        default=640_000,
         help='number of samples used for each training phases',
     )
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
@@ -439,7 +440,7 @@ if __name__ == '__main__':
     
     
     if args.sched:
-        args.lr = {4: 1e-3, 8: 1e-3, 16: 1e-3, 32: 5e-4, 64: 5e-4, 128: 5e-4, 256: 5e-4}
+        args.lr = {4: 1e-3, 8: 1e-3, 16: 1e-3, 32: 1e-3, 64: 1e-3, 128: 1e-3, 256: 1e-3}
         args.batch = {4: 64, 8: 64, 16: 32, 32: 32, 64: 32, 128: 16, 256: 16}
 
     else:
