@@ -14,13 +14,13 @@ __C.DATASET_NAME = 'birds'
 __C.CONFIG_NAME = ''
 __C.DATA_DIR = '../data/birds'
 __C.GPU_ID = 0
-__C.CUDA = False
+__C.CUDA = True
 __C.WORKERS = 4
 
 
 
 
-__C.E_DIM = 256          # Sentence embedding dimension
+__C.E_DIM = 128          # Sentence embedding dimension
 __C.WORD_DIM = 768          # Word embedding dimension
 __C.C_DIM = 128          # Condition c_code dimension
 __C.Z_DIM = 128          # Random z_code dimension
@@ -44,13 +44,13 @@ __C.M.USE_NORM = True
 
 ## GAN
 __C.GAN = edict()
-__C.GAN.RESOLUTION_INIT = 8
-__C.GAN.RESOLUTION = 256     # Target image's resolution
-__C.GAN.USE_ATTENTION = True
-__C.GAN.USE_NOISE = True
+__C.GAN.RESOLUTION_INIT = 4
+__C.GAN.RESOLUTION = 128     # Target image's resolution
+__C.GAN.USE_ATTENTION = False
+__C.GAN.USE_NOISE = False
 __C.GAN.USE_PIXEL_NORM = False
 __C.GAN.USE_INSTANCE_NORM = True
-__C.GAN.USE_TRUNCATION = True
+__C.GAN.USE_TRUNCATION = False
 
 __C.GAN.DF_DIM = 64
 __C.GAN.GF_DIM = 128
@@ -74,12 +74,13 @@ __C.B_VALIDATION = False
 # Training options
 __C.TRAIN = edict()
 __C.TRAIN.BATCH_SIZE = 8
-__C.TRAIN.MAX_EPOCH = 100
+__C.TRAIN.MAX_EPOCH = 500
 __C.TRAIN.CRITIC_ITER = 5
+__C.TRAIN.CLIPPING = 0.01
 
 __C.TRAIN.SNAPSHOT_INTERVAL = 10
-__C.TRAIN.DISCRIMINATOR_LR = 1e-4
-__C.TRAIN.GENERATOR_LR = 2e-4
+__C.TRAIN.DISCRIMINATOR_LR = 2e-4
+__C.TRAIN.GENERATOR_LR = 1e-4
 __C.TRAIN.ENCODER_LR = 2e-4
 __C.TRAIN.RNN_GRAD_CLIP = 0.25
 __C.TRAIN.FLAG = True
@@ -99,8 +100,8 @@ __C.TRAIN.GAMMA3 = 1e-8
 
 ## Tree
 __C.TREE = edict()
-__C.TREE.BRANCH_NUM = 3
-__C.TREE.BASE_SIZE = 64
+__C.TREE.BRANCH_NUM = 1
+__C.TREE.BASE_SIZE = 128
 
 
 

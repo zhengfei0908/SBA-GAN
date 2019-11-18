@@ -106,13 +106,15 @@ def g_loss_wgan(d_net, img_encoder, fake_imgs, sent_emb, match_labels):
         cond_output = d_net.cond_dnet(features, sent_emb)
         cond_errG = -cond_output.mean()
         errG_total += cond_errG
+        errG_total /= 2.
     
     # img_code = img_encoder(fake_imgs)
     # s_loss0, s_loss1 = sent_loss(sent_emb, img_code, match_labels)
     # s_loss = (s_loss0 + s_loss1) * cfg.TRAIN.LAMBDA
     # errG_total += s_loss
     
-    return errG_total
+    # return errG_total
+    return errG_total, errG, cond_errG
 
 def d_loss_wgan(d_net, real_imgs, fake_imgs, sent_emb):
     
@@ -141,4 +143,5 @@ def d_loss_wgan(d_net, real_imgs, fake_imgs, sent_emb):
                 (real_errD + cond_real_errD) / 2. +\
                   gradient_penalty
     # minimize
-    return errD
+    # return errD
+    return errD, (fake_errD + cond_fake_errD + cond_wrong_errD) / 3., (real_errD + cond_real_errD) / 2., gradient_penalty

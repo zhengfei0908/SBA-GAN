@@ -81,11 +81,14 @@ class Apply_Style(nn.Module):
         self.channels = channels
         self.resolution = resolution
         self.use_attn = use_attn
+        
         if self.use_attn:
             self.attn = GlobalAttentionGeneral(channels, resolution)
             self.fc = nn.Linear(self.w_dim + self.a_dim, self.channels*2)
         else:
             self.fc = nn.Linear(self.w_dim, self.channels*2)
+        
+        self.act = nn.LeakyReLU(negative_slope=0.2)
         
     def forward(self, x, w_code, word_embedding):
         """
@@ -103,7 +106,8 @@ class Apply_Style(nn.Module):
             style_code = self.fc(style_code) # [batch_size, n_channels*2]
         else:
             style_code = self.fc(w_code)     # [batch_size, n_channels*2]
-
+        
+        style_code = self.act(style_code)
         shape = [-1, 2, x.size(1), 1, 1]
         style_code = style_code.view(shape) 
         x = x * (style_code[:, 0] + 1.) + style_code[:, 1]

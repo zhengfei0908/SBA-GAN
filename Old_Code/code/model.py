@@ -144,9 +144,12 @@ class Layer_Epilogue(nn.Module):
 
         super(Layer_Epilogue, self).__init__()
         self.act = nn.LeakyReLU(negative_slope=0.2)
-
+        self.use_noise = use_noise
+        
         if use_noise:
             self.apply_noise = Apply_Noise(channels)
+        else:
+            self.apply_noise = None
         
         if use_pixel_norm:
             self.pixel_norm = Pixel_Norm()
@@ -170,8 +173,8 @@ class Layer_Epilogue(nn.Module):
         Outputs:
             x: [batch_size, channels, resolution, resolution]
         """
-
-        x = self.apply_noise(x, noise)
+        if self.apply_noise is not None:
+            x = self.apply_noise(x, noise)
         x = self.act(x)
         if self.pixel_norm is not None:
             x = self.pixel_norm(x)
@@ -349,7 +352,7 @@ class G_NET(nn.Module):
 
         ## to image
         self.torgb = nn.Conv2d(self.nf(self.resolution_log2), out_channels, kernel_size=1, stride=1)
-        self.tanh = nn.Tanh()
+        # self.tanh = nn.Tanh()
 
     def forward(self, text, z_code):
         ''' 
@@ -378,7 +381,7 @@ class G_NET(nn.Module):
         for i, block in enumerate(self.generator):
             x = block(x, w_code[:,(i*2+2):(i*2+4)], words_embs)
         x = self.torgb(x)
-        x = self.tanh(x)
+        # x = self.tanh(x)
         
         return x, words_embs, sent_emb, mu, log_var
 

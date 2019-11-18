@@ -49,10 +49,10 @@ class condGANTrainer(object):
         print('Load image encoder incept v3')
 
         text_encoder = BERT_EMBEDDING()
-        for p in text_encoder.parameters():
-            p.requires_grad = False
+#         for p in text_encoder.parameters():
+#             p.requires_grad = False
         print('Load text encoder bert')
-        text_encoder.eval()
+#         text_encoder.eval()
 
         # #######################generator and discriminators############## #
         epoch = 0
@@ -70,13 +70,21 @@ class condGANTrainer(object):
         # ########################################################### #
         
     def define_optimizers(self,netG, netD):
-        optimizersD = optim.Adam(netD.parameters(),
-                          lr=cfg.TRAIN.DISCRIMINATOR_LR,
-                          betas=(0.5, 0.999))
-        optimizerG = optim.Adam(netG.parameters(),
-                                lr=cfg.TRAIN.GENERATOR_LR,
-                                betas=(0.5, 0.999))
-        return optimizerG, optimizersD
+#         optimizerD = optim.Adam(netD.parameters(),
+#                           lr=cfg.TRAIN.DISCRIMINATOR_LR,
+#                           betas=(0.5, 0.999))
+#         optimizerG = optim.Adam(netG.parameters(),
+#                                 lr=cfg.TRAIN.GENERATOR_LR,
+#                                 betas=(0.5, 0.999))
+        optimizerG = optim.RMSprop(netG.parameters(),
+                                   lr=cfg.TRAIN.GENERATOR_LR,
+                                   alpha=0.99)
+    
+        optimizerD = optim.RMSprop(netD.parameters(),
+                                   lr=cfg.TRAIN.DISCRIMINATOR_LR,
+                                   alpha=0.99)
+        
+        return optimizerG, optimizerD
 
     def prepare_labels(self):
         batch_size = self.batch_size
@@ -150,7 +158,7 @@ class condGANTrainer(object):
     def train(self):
         text_encoder, image_encoder, netG, netD, start_epoch = self.build_models()
         avg_param_G = copy_G_params(netG)
-        optimizerG, optimizersD = self.define_optimizers(netG, netD)
+        optimizerG, optimizerD = self.define_optimizers(netG, netD)
         print("Load optimizers")
         real_labels, fake_labels, match_labels = self.prepare_labels()
 
@@ -179,7 +187,8 @@ class condGANTrainer(object):
                 data = data_iter.next()
 #                 imgs, captions, cap_lens, class_ids, keys = prepare_data(data)
                 real_imgs, text, cap_lens, _, _ = prepare_data(data)
-                real_imgs = real_imgs[-1]
+                #real_imgs = real_imgs[-1]
+                real_imgs = real_imgs[0]
                 #######################################################
                 # (2) Generate fake images
                 ######################################################
@@ -189,14 +198,18 @@ class condGANTrainer(object):
                 #######################################################
                 # (3) Update D network
                 ######################################################
+                
                 errD = 0
                 D_logs = ''
-                netD.zero_grad()
-                errD = d_loss_wgan(netD, real_imgs, fake_imgs,sent_emb)
+                optimizerD.zero_grad()
+                errD, fake_errD, real_errD, penalty = d_loss_wgan(netD, real_imgs, fake_imgs,sent_emb)
+                # errD = d_loss_wgan(netD, real_imgs, fake_imgs,sent_emb)
                 # backward and update parameters
                 errD.backward()
-                optimizersD.step()
-                D_logs += 'errD: %.2f ' % (errD.data)
+                optimizerD.step()
+#                 for p in netD.parameters():
+#                     p.data.clamp_(-cfg.TRAIN.CLIPPING, cfg.TRAIN.CLIPPING)
+                D_logs += 'errD: %.4f' % (errD.data)
                 step += 1
 
                 #######################################################
@@ -208,24 +221,24 @@ class condGANTrainer(object):
                     G_logs = ''
                     # do not need to compute gradient for Ds
                     # self.set_requires_grad_value(netsD, False)
-                    netG.zero_grad()
-                    errG = g_loss_wgan(netD, image_encoder, fake_imgs, sent_emb, match_labels)
+                    netD.zero_grad()
+                    optimizerG.zero_grad()
+                    errG, uncond_errG, cond_errG = g_loss_wgan(netD, image_encoder, fake_imgs, sent_emb, match_labels)
+                    # errG = g_loss_wgan(netD, image_encoder, fake_imgs, sent_emb, match_labels)
                     # backward and update parameters
                     errG.backward()
                     optimizerG.step()
-                    G_logs += 'errG: %.2f ' % (errG.data)
+                    # G_logs += 'errG: %.4f' % (errG.data)
+                    G_logs += 'errG: %.2f uncond_errG: %.2f cond_errG: %.2f' % (errG.data, uncond_errG.data, cond_errG.data)
                     gen_iterations += 1
                     
-                    # save images
-                    if gen_iterations % 100 == 0:
-                        self.save_singleimages(data, fixed_noise, netG, '../output','test', gen_iterations)
                 #not update G this time
 #                 for p, avg_p in zip(netG.parameters(), avg_param_G):
 #                     avg_p.mul_(0.999).add_(0.001, p.data)
 
 
                 if step % 100 == 0:
-                    print('''step: %d  D_logs: %.2f  G_logs: %.2f''' % (step, D_logs, G_logs))
+                    print('[step: ' + str(step) + ']' + D_logs + G_logs)
 
                 
 #                     backup_para = copy_G_params(netG)
@@ -242,36 +255,40 @@ class condGANTrainer(object):
             end_t = time.time()
 
             print('''[%d/%d][%d]
-                  Loss_D: %.2f Loss_G: %.2f Time: %.2fs'''
+                  Loss_D: %.4f Loss_G: %.4f Time: %.2fs'''
                   % (epoch, self.max_epoch, self.num_batches,
                      errD.item(), errG.item(),
                      end_t - start_t))
-
+            # save image
+            self.save_singleimages(data, fixed_noise, netG, '../output','test', epoch)
             if epoch % cfg.TRAIN.SNAPSHOT_INTERVAL == 0 and epoch != 0:
                 self.save_model(netG, avg_param_G, netD, epoch)
 
         self.save_model(netG, avg_param_G, netD, self.max_epoch)
 
     def save_singleimages(self,data,z_code,netG, save_dir,
-                          split_dir,gen_iterations):
+                          split_dir,epoch):
 
         real_imgs, text, _, _, keys = prepare_data(data)
     #         real_imgs = real_imgs[-1]
         fake_imgs, _, _,_,_ = netG(text,z_code)
-        real_imgs = real_imgs[-1]
-        for i in range(fake_imgs.size(0)):
-            s_tmp = '%s/single_samples/%s/gen%s/' %\
-                (save_dir, split_dir, gen_iterations//1000)
+        real_imgs = real_imgs[0]
+        for i in range(5):
+            # s_tmp = '%s/%s/gen%s/' % (save_dir, split_dir, epoch)
+            s_tmp = '%s/%s/' %\
+                (save_dir, split_dir)
             folder = s_tmp[:s_tmp.rfind('/')]
             if not os.path.isdir(folder):
                 print('Make a new folder: ', folder)
                 mkdir_p(folder)
 
-            key = keys[i].replace('.','_')
-            key = key.replace('/' , '_')
-            tokens = '_'.join([self.tokenizer.convert_ids_to_tokens([w.item()])[0] for w in text[i]])
-            fullpath_fake = '%s_%s_fake.jpg' % (s_tmp, tokens)
-            fullpath_real = '%s_%s_real.jpg' % (s_tmp, tokens)
+            # key = keys[i].replace('.','_')
+            # key = key.replace('/' , '_')
+            # tokens = '_'.join([self.tokenizer.convert_ids_to_tokens([w.item()])[0] for w in text[i]])
+            # fullpath_fake = '%s_%s_fake.jpg' % (s_tmp, tokens)
+            # fullpath_real = '%s_%s_real.jpg' % (s_tmp, tokens)
+            fullpath_fake = '%s_%s_%s_fake.jpg' % (s_tmp, epoch, i)
+            fullpath_real = '%s_%s_%s_real.jpg' % (s_tmp, epoch, i)
 
 
             # range from [-1, 1] to [0, 1]
