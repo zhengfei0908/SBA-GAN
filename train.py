@@ -15,10 +15,12 @@ from torch.autograd import Variable, grad
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms, utils
 from pytorch_pretrained_bert import BertTokenizer
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision.models.inception import inception_v3
 from dataset import MultiResolutionDataset
 # from datasets import TextDataset, prepare_data
 from model import StyledGenerator, Discriminator, TextProcess
+
 
 def requires_grad(model, flag=True):
     for p in model.parameters():
@@ -35,7 +37,7 @@ def accumulate(model1, model2, decay=0.99):
 
 def sample_data(dataset, batch_size, image_size=8):
     dataset.resolution = image_size
-    loader = DataLoader(dataset, shuffle=True, batch_size=batch_size, num_workers=4)
+    loader = DataLoader(dataset, shuffle=False, batch_size=batch_size, num_workers=8)
 
     return loader
 
@@ -202,7 +204,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
         ####Todo: fit for condition gan###
         elif args.loss == 'r1':
             real_image.requires_grad = True
-            real_scores = discriminator(real_image, step=step, alpha=alpha)
+            real_scores = discriminator(real_image, sent_emb, step=step, alpha=alpha)
             real_predict = F.softplus(-real_scores).mean()
             real_predict.backward(retain_graph=True)
 
@@ -226,12 +228,14 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
             gen_in2 = [gen_in21.squeeze(0), gen_in22.squeeze(0)]
 
         else:
-            gen_in1, gen_in2 = torch.randn(2, b_size, 512, device='cuda').chunk(
+            gen_in1, gen_in2 = torch.randn(2, b_size, 384, device='cuda').chunk(
                 2, 0
             )
             gen_in1, gen_in2 = gen_in1.squeeze(0), gen_in2.squeeze(0)
+            gen_in1 = torch.cat([gen_in1, c_code], dim=1)
+            gen_in2 = torch.cat([gen_in2, c_code], dim=1)
 
-        fake_image = generator(gen_in1, c_code, step=step, alpha=alpha)
+        fake_image = generator(gen_in1, step=step, alpha=alpha)
         fake_predict = discriminator(fake_image, sent_emb, step=step, alpha=alpha)
         mismatch_predict = discriminator(real_image[:(b_size-1)], sent_emb[1:b_size], step=step, alpha=alpha)
 
@@ -269,29 +273,27 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
             text_process.zero_grad()
             generator.zero_grad()
             
-#             if resolution <= 8:
-#                 requires_grad(text_process, True)
-#             else:
-#                 requires_grad(text_process.module.bert_embedding.fc, True)
-#                 requires_grad(text_process.module.ca_net, True)
-            requires_grad(text_process.module.bert_embedding.fc, True)
-            requires_grad(text_process.module.ca_net, True)
+            if resolution <= 16:
+                requires_grad(text_process, True)
+            else:
+                requires_grad(text_process.module.bert_embedding.fc, True)
+                requires_grad(text_process.module.ca_net, True)
             requires_grad(generator, True)
             requires_grad(discriminator, False)
 
-            fake_image = generator(gen_in2, c_code, step=step, alpha=alpha)
+            fake_image = generator(gen_in2, step=step, alpha=alpha)
 
             predict = discriminator(fake_image, sent_emb, step=step, alpha=alpha)
 
             if args.loss == 'wgan-gp':
                 loss = (-predict).mean()
-                kl_loss = KL_loss(mu, log_var)
-                (loss + kl_loss).backward()
+                
 
             elif args.loss == 'r1':
                 loss = F.softplus(-predict).mean()
                 
-            
+            kl_loss = KL_loss(mu, log_var)
+            (loss + kl_loss).backward()
             
             if (i+1) % 10 == 0:
                 gen_loss_val = loss.item()
@@ -313,7 +315,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
                 for _ in range(fixed_gen_i):
                     images.append(
                         g_running(
-                            torch.randn(fixed_gen_j, code_size).cuda(), fixed_c_code[:fixed_gen_j], step=step, alpha=alpha
+                            torch.cat([torch.randn(fixed_gen_j, 384).cuda(), fixed_c_code[:fixed_gen_j]], dim=1), step=step, alpha=alpha
                         ).data.cpu()
                     )
                     
@@ -359,6 +361,7 @@ if __name__ == '__main__':
         default=640_000,
         help='number of samples used for each training phases',
     )
+#     parser.add_argument('--local_rank', type=int)
     parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
     parser.add_argument('--sched', action='store_true', help='use lr scheduling')
     parser.add_argument('--init_size', default=4, type=int, help='initial image size')
@@ -385,12 +388,14 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    text_process = nn.DataParallel(TextProcess(max_length=24, embedding_dim=512, condition_dim=512)).cuda()
+#     torch.distributed.init_process_group(backend="nccl")
+    text_process = nn.DataParallel(TextProcess(max_length=24, embedding_dim=128, condition_dim=128)).cuda()
     generator = nn.DataParallel(StyledGenerator(code_size)).cuda()
     discriminator = nn.DataParallel(
         Discriminator(from_rgb_activate=not args.no_from_rgb_activate)
     ).cuda()
-    t_running = TextProcess(max_length=24, embedding_dim=512, condition_dim=512).cuda()
+    t_running = TextProcess(max_length=24, embedding_dim=128, condition_dim=128).cuda()
+    
     t_running.train(False)
     g_running = StyledGenerator(code_size).cuda()
     g_running.train(False)
@@ -441,7 +446,7 @@ if __name__ == '__main__':
     
     if args.sched:
         args.lr = {4: 1e-3, 8: 1e-3, 16: 1e-3, 32: 1e-3, 64: 1e-3, 128: 1e-3, 256: 1e-3}
-        args.batch = {4: 64, 8: 64, 16: 32, 32: 32, 64: 32, 128: 16, 256: 16}
+        args.batch = {4: 128, 8: 128, 16: 64, 32: 32, 64: 32, 128: 16, 256: 16}
 
     else:
         args.lr = {}
