@@ -300,13 +300,13 @@ class ConstantInput(nn.Module):
     def __init__(self, channel, size=4):
         super().__init__()
         
-        self.size = size
-        #self.const = nn.Parameter(torch.randn(1, channel, size, size))
+#         self.size = size
+        self.const = nn.Parameter(torch.randn(1, channel, size, size))
 
-    def forward(self, input, c_code):
+    def forward(self, input):
         batch = input.shape[0]
-        #out = self.const.repeat(batch, 1, 1, 1)
-        out = c_code.view(batch,-1,1,1).repeat(1, 1, self.size, self.size)
+        out = self.const.repeat(batch, 1, 1, 1)
+#         out = c_code.view(batch,-1,1,1).repeat(1, 1, self.size, self.size)
         return out
 
 
@@ -361,11 +361,8 @@ class StyledConvBlock(nn.Module):
         self.adain2 = AdaptiveInstanceNorm(out_channel, style_dim)
         self.lrelu2 = nn.LeakyReLU(0.2)
 
-    def forward(self, input, style, noise, c_code=None):
-        if c_code is not None:
-            out = self.conv1(input, c_code)
-        else:
-            out = self.conv1(input)
+    def forward(self, input, style, noise):
+        out = self.conv1(input)
         out = self.noise1(out, noise)
         out = self.lrelu1(out)
         out = self.adain1(out, style)
@@ -409,7 +406,7 @@ class Generator(nn.Module):
 
         # self.blur = Blur()
 
-    def forward(self, style, noise, c_code, step=0, alpha=-1, mixing_range=(-1, -1)):
+    def forward(self, style, noise, step=0, alpha=-1, mixing_range=(-1, -1)):
         out = noise[0]
 
         if len(style) < 2:
@@ -437,10 +434,7 @@ class Generator(nn.Module):
             if i > 0 and step > 0:
                 out_prev = out
             
-            if i==0:
-                out = conv(out, style_step, noise[i], c_code)
-            else:
-                out = conv(out, style_step, noise[i])
+            out = conv(out, style_step, noise[i])
 
             if i == step:
                 out = to_rgb(out)
@@ -456,7 +450,7 @@ class Generator(nn.Module):
 
 
 class StyledGenerator(nn.Module):
-    def __init__(self, code_dim=512, n_mlp=6):
+    def __init__(self, code_dim=512, n_mlp=8):
         super().__init__()
 
         self.generator = Generator(code_dim)
@@ -471,7 +465,6 @@ class StyledGenerator(nn.Module):
     def forward(
         self,
         input,
-        c_code,
         noise=None,
         step=0,
         alpha=-1,
@@ -503,7 +496,7 @@ class StyledGenerator(nn.Module):
 
             styles = styles_norm
 
-        return self.generator(styles, noise, c_code, step, alpha, mixing_range=mixing_range)
+        return self.generator(styles, noise, step, alpha, mixing_range=mixing_range)
 
     def mean_style(self, input):
         style = self.style(input).mean(0, keepdim=True)
@@ -523,7 +516,7 @@ class Discriminator(nn.Module):
                 ConvBlock(128, 256, 3, 1, downsample=True, fused=fused),  # 16
                 ConvBlock(256, 512, 3, 1, downsample=True),  # 8
                 ConvBlock(512, 512, 3, 1, downsample=True),  # 4
-                ConvBlock(513 + 512, 512, 3, 1, 4, 0),
+                ConvBlock(513 + 128, 512, 3, 1, 4, 0),
             ]
         )
 
