@@ -1,0 +1,166 @@
+%%%%%%%% ICML 2019 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%%
+
+\documentclass{article}
+
+% Recommended, but optional, packages for figures and better typesetting:
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{booktabs} % for professional tables
+
+% hyperref makes hyperlinks in the resulting PDF.
+% If your build breaks (sometimes temporarily if a hyperlink spans a page)
+% please comment out the following usepackage line and replace
+% \usepackage{icml2019} with \usepackage[nohyperref]{icml2019} above.
+\usepackage{hyperref}
+
+% Attempt to make hyperref and algorithmic work together better:
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% Use the following line for the initial blind version submitted for review:
+%\usepackage{icml2020}
+
+% If accepted, instead use the following line for the camera-ready submission:
+\usepackage[accepted]{icml2020}
+
+% The \icmltitle you define below is probably too long as a header.
+% Therefore, a short form for the running title is supplied here:
+\icmltitlerunning{Text-to-image Implementation of Conditional Style GAN}
+
+\begin{document}
+
+\twocolumn[
+\icmltitle{Proposal: Text-to-image Implementation of Conditional Style GAN}
+
+% It is OKAY to include author information, even for blind
+% submissions: the style file will automatically remove it for you
+% unless you've provided the [accepted] option to the icml2019
+% package.
+
+% List of affiliations: The first argument should be a (short)
+% identifier you will use later to specify author affiliations
+% Academic affiliations should list Department, University, City, Region, Country
+% Industry affiliations should list Company, City, Region, Country
+
+% You can specify symbols, otherwise they are numbered in order.
+% Ideally, you should not use this facility. Affiliations will be numbered
+% in order of appearance and this is the preferred way.
+\icmlsetsymbol{equal}{*}
+
+\begin{icmlauthorlist}
+\icmlauthor{Fei Zheng fz2277}{equal,to}
+\icmlauthor{Chirong Zhang cz2533}{equal,to}
+\icmlauthor{Xiaoxi Zhao xz2740}{equal,to}
+\end{icmlauthorlist}
+
+\icmlaffiliation{to}{Department of Statistics, Columbia University, New York, USA}
+
+% \icmlcorrespondingauthor{}{}
+
+% You may provide any keywords that you
+% find helpful for describing your paper; these are used to populate
+% the "keywords" metadata in the PDF but will not be shown in the document
+\icmlkeywords{Machine Learning, ICML}
+
+\vskip 0.3in
+]
+
+% this must go after the closing bracket ] following \twocolumn[ ...
+
+% This command actually creates the footnote in the first column
+% listing the affiliations and the copyright notice.
+% The command takes one argument, which is text to display at the start of the footnote.
+% The \icmlEqualContribution command is standard text for equal contribution.
+% Remove it (just {}) if you do not need this facility.
+
+\printAffiliationsAndNotice{}  % leave blank if no need to mention equal contribution
+% \printAffiliationsAndNotice{\icmlEqualContribution} % otherwise use the standard text.
+
+% \begin{abstract}
+% This document provides a basic paper template and submission guidelines.
+% Abstracts must be a single paragraph, ideally between 4--6 sentences long.
+% Gross violations will trigger corrections at the camera-ready phase.
+% \end{abstract}
+
+\section{Previous work and references}
+\subsection{Conditional GAN}
+Conditional GAN\cite{cgan} has investigated a general-purpose solution to image-to-image translation problems. It introduces conditional information both in generator and discriminator, which makes the generation process more supervised.
+\subsection{Style GAN}
+The Style-Based Generator Architecture for Cenerative Adversarial Networks (GAN)\cite{stylegan} has proposed a new generator architecture for GAN using style transfer techniques\cite{styletransferog}. This new architecture disentangles the latent factors of variation, which is one of the main limitations of ProGAN\cite{progan}. Here are the main breakthroughs:
+
+\begin{itemize}
+\item A style-based generator with unsupervised separation of high-level attributes 
+\item Scale-specific control of synthesis
+\item Generator starts from trainable constants and embeds the input latent code into an intermediate latent space which better disentangles the features
+\item Two new metrics to quantify the disentanglement: perceptual path length and linear separability
+
+\end{itemize}
+\subsection{Text to Image Synthesis}
+Based on the DCGAN\cite{dcgan}, Reed\yrcite{text2image} has proposed an architecture to do text-to-image translation. In his algorithm GAN-CLS\cite{text2image}, he introduces a third type of input consisting of real images with mismatched text in discriminator in addition to the real/fake inputs. This provides an additional signal to the generator. Also, he explores the disentangling of style and content by inverting the generator for style and it turns out captions alone are not informative for style prediction.
+
+\section{New Problem Proposal: Text-to-image Translation}
+The pre-trained model BERT\cite{bert} made it a great breakthrough in the domain of word embedding. Conditional GAN\cite{cgan} proposed a new solution to translating from images to images, which might be applicable in translating from other than images. Style GAN\cite{stylegan} investigated a new architecture to generate high-quality images.
+
+We try to combine advantages of these networks in our network and apply it to translate texts to corresponding images.
+
+Initially, we will use pre-trained BERT\cite{bert} to transform texts to embedding vectors. After concatenating it with random noise from normal distribution, we will run it through the mapping network and the generator, just the same as in style GAN\cite{stylegan}. Then we put the tuple of text and fake image and the corresponding tuple of text and real image into discriminator, just like in conditional GAN.
+
+Since there are several alternative loss functions in these researches, this is a main field we would explore. We might consider inception distance, L1 distance or L2 distance in generating process. We will first train our model on the flower dataset. Our target is to generate a corresponding flower image given any description of the flower.
+
+\subsection{Evaluation Criteria}
+
+We will use Frechet inception distance (FID)\cite{fid}(lower is better) to calculate how far the generated images are away from the real images
+
+\subsection{Dataset}
+We will apply our text-to-image model on a dataset of flowers with 102 categories and 5 captions for each image \footnote{http://www.robots.ox.ac.uk/~vgg/data/flowers/102/}. Then if time permits, we may extend our model to COCO dataset \footnote{http://cocodataset.org/} including common objects.
+
+
+\newpage
+
+% In the unusual situation where you want a paper to appear in the
+% references without citing it in the main text, use \nocite
+\nocite{langley00}
+
+\bibliography{example_paper}
+\bibliographystyle{icml2020}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% DELETE THIS PART. DO NOT PLACE CONTENT AFTER THE REFERENCES!
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% \appendix
+% \section{Do \emph{not} have an appendix here}
+
+% \textbf{\emph{Do not put content after the references.}}
+% %
+% Put anything that you might normally include after the references in a separate
+% supplementary file.
+
+% We recommend that you build supplementary material in a separate document.
+% If you must create one PDF and cut it up, please be careful to use a tool that
+% doesn't alter the margins, and that doesn't aggressively rewrite the PDF file.
+% pdftk usually works fine. 
+
+% \textbf{Please do not use Apple's preview to cut off supplementary material.} In
+% previous years it has altered margins, and created headaches at the camera-ready
+% stage. 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\end{document}
+
+
+% This document was modified from the file originally made available by
+% Pat Langley and Andrea Danyluk for ICML-2K. This version was created
+% by Iain Murray in 2018, and modified by Alexandre Bouchard in
+% 2019. Previous contributors include Dan Roy, Lise Getoor and Tobias
+% Scheffer, which was slightly modified from the 2010 version by
+% Thorsten Joachims & Johannes Fuernkranz, slightly modified from the
+% 2009 version by Kiri Wagstaff and Sam Roweis's 2008 version, which is
+% slightly modified from Prasad Tadepalli's 2007 version which is a
+% lightly changed version of the previous year's version by Andrew
+% Moore, which was in turn edited from those of Kristian Kersting and
+% Codrina Lauth. Alex Smola contributed to the algorithmic style files.

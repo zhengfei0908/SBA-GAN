@@ -1,4 +1,5 @@
 /data
+/output
 
 # General
 .DS_Store
@@ -34,6 +35,7 @@ __pycache__/
 
 # C extensions
 *.so
+*.pyc
 
 # Distribution / packaging
 .Python
@@ -131,3 +133,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# vs code
+.vscode/
