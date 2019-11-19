@@ -101,10 +101,10 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
     
     data_loader = iter(loader)
 
-    adjust_lr(g_optimizer, args.lr.get(resolution, 0.001))
-    adjust_lr(d_optimizer, args.lr.get(resolution, 0.001))
+    adjust_lr(g_optimizer, args.lr.get(resolution, 0.0001))
+    adjust_lr(d_optimizer, args.lr.get(resolution, 0.0002))
 
-    pbar = tqdm(range(300_000))
+    pbar = tqdm(range(110000, 300_000))
     
     
     requires_grad(text_process, False)
@@ -141,7 +141,8 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
         discriminator.zero_grad()
 
         alpha = min(1, 1 / args.phase * (used_sample + 1))
-        if (resolution == args.init_size and args.ckpt is None) or final_progress:
+#         if (resolution == args.init_size and args.ckpt is None) or final_progress:
+        if resolution == args.init_size or final_progress:
             alpha = 1
 
         if used_sample > args.phase * 2:
@@ -178,9 +179,9 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
                 os.path.join(args.out, f'checkpoint/train_step-{ckpt_step}.model')
             )
 
-            adjust_lr(t_optimizer, args.lr.get(resolution, 0.001))
-            adjust_lr(g_optimizer, args.lr.get(resolution, 0.001))
-            adjust_lr(d_optimizer, args.lr.get(resolution, 0.001))
+            adjust_lr(t_optimizer, args.lr.get(resolution, 0.0001))
+            adjust_lr(g_optimizer, args.lr.get(resolution, 0.0001))
+            adjust_lr(d_optimizer, args.lr.get(resolution, 0.0002))
 
         try:
             real_image, caption = next(data_loader)
@@ -308,7 +309,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
             requires_grad(generator, False)
             requires_grad(discriminator, True)
 
-        if (i + 1) % 1000 == 0:
+        if (i + 1) % 2000 == 0:
             images = []
             with torch.no_grad():
                 fixed_c_code, _, _, _, _ = t_running(fixed_caption)
@@ -362,7 +363,7 @@ if __name__ == '__main__':
         help='number of samples used for each training phases',
     )
 #     parser.add_argument('--local_rank', type=int)
-    parser.add_argument('--lr', default=0.001, type=float, help='learning rate')
+    parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
     parser.add_argument('--sched', action='store_true', help='use lr scheduling')
     parser.add_argument('--init_size', default=4, type=int, help='initial image size')
     parser.add_argument('--max_size', default=256, type=int, help='max image size')
@@ -412,7 +413,7 @@ if __name__ == '__main__':
             'mult': 0.01,
         }
     )
-    d_optimizer = optim.Adam(discriminator.parameters(), lr=args.lr, betas=(0.0, 0.99))
+    d_optimizer = optim.Adam(discriminator.parameters(), lr=2*args.lr, betas=(0.0, 0.99))
     
     accumulate(t_running, text_process.module, 0)
     accumulate(g_running, generator.module, 0)
@@ -445,7 +446,7 @@ if __name__ == '__main__':
     
     
     if args.sched:
-        args.lr = {4: 1e-3, 8: 1e-3, 16: 1e-3, 32: 1e-3, 64: 1e-3, 128: 1e-3, 256: 1e-3}
+        args.lr = {4: 1e-3, 8: 1e-3, 16: 1e-3, 32: 1e-4, 64: 1e-4, 128: 1e-4, 256: 1e-4}
         args.batch = {4: 128, 8: 128, 16: 64, 32: 32, 64: 32, 128: 16, 256: 16}
 
     else:
