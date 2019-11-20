@@ -14,7 +14,7 @@ from torch.nn import functional as F
 from torch.autograd import Variable, grad
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms, utils
-from pytorch_pretrained_bert import BertTokenizer
+from pytorch_pretrained_bert import BertTokenizer, BertAdam
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torchvision.models.inception import inception_v3
 from dataset import MultiResolutionDataset
@@ -102,9 +102,9 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
     data_loader = iter(loader)
 
     adjust_lr(g_optimizer, args.lr.get(resolution, 0.0001))
-    adjust_lr(d_optimizer, args.lr.get(resolution, 0.0002))
+    adjust_lr(d_optimizer, args.lr.get(resolution, 0.0004))
 
-    pbar = tqdm(range(110000, 300_000))
+    pbar = tqdm(range(0, 300_000))
     
     
     requires_grad(text_process, False)
@@ -181,7 +181,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
 
             adjust_lr(t_optimizer, args.lr.get(resolution, 0.0001))
             adjust_lr(g_optimizer, args.lr.get(resolution, 0.0001))
-            adjust_lr(d_optimizer, args.lr.get(resolution, 0.0002))
+            adjust_lr(d_optimizer, args.lr.get(resolution, 0.0004))
 
         try:
             real_image, caption = next(data_loader)
@@ -238,12 +238,13 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
 
         fake_image = generator(gen_in1, step=step, alpha=alpha)
         fake_predict = discriminator(fake_image, sent_emb, step=step, alpha=alpha)
-        mismatch_predict = discriminator(real_image[:(b_size-1)], sent_emb[1:b_size], step=step, alpha=alpha)
+        #mismatch_predict = discriminator(real_image[:(b_size-1)], sent_emb[1:b_size], step=step, alpha=alpha)
 
         if args.loss == 'wgan-gp':
-            fake_predict = fake_predict.mean() / 2.
-            mismatch_predict = mismatch_predict.mean() / 2.
-            (fake_predict + mismatch_predict).backward(retain_graph=True)
+            fake_predict = fake_predict.mean()
+#             mismatch_predict = mismatch_predict.mean() / 2.
+#             (fake_predict + mismatch_predict).backward(retain_graph=True)
+            (fake_predict).backward(retain_graph=True)
 
             eps = torch.rand(b_size, 1, 1, 1).cuda()
             x_hat = eps * real_image.data + (1 - eps) * fake_image.data
@@ -259,7 +260,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
             grad_penalty.backward()
             if (i+1)%10 == 0:
                 grad_loss_val = grad_penalty.item()
-                disc_loss_val = (-real_predict + fake_predict + mismatch_predict).item()
+                disc_loss_val = (-real_predict + fake_predict).item()
 
         ####Todo: fit for condition gan###
         elif args.loss == 'r1':
@@ -274,11 +275,8 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
             text_process.zero_grad()
             generator.zero_grad()
             
-            if resolution <= 16:
+            if resolution <= 8:
                 requires_grad(text_process, True)
-            else:
-                requires_grad(text_process.module.bert_embedding.fc, True)
-                requires_grad(text_process.module.ca_net, True)
             requires_grad(generator, True)
             requires_grad(discriminator, False)
 
@@ -309,7 +307,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
             requires_grad(generator, False)
             requires_grad(discriminator, True)
 
-        if (i + 1) % 2000 == 0:
+        if (i + 1) % 1000 == 0:
             images = []
             with torch.no_grad():
                 fixed_c_code, _, _, _, _ = t_running(fixed_caption)
@@ -365,8 +363,8 @@ if __name__ == '__main__':
 #     parser.add_argument('--local_rank', type=int)
     parser.add_argument('--lr', default=0.0001, type=float, help='learning rate')
     parser.add_argument('--sched', action='store_true', help='use lr scheduling')
-    parser.add_argument('--init_size', default=4, type=int, help='initial image size')
-    parser.add_argument('--max_size', default=256, type=int, help='max image size')
+    parser.add_argument('--init_size', default=8, type=int, help='initial image size')
+    parser.add_argument('--max_size', default=64, type=int, help='max image size')
     parser.add_argument('--out', default=None, type=str, help='path of output folder')
     parser.add_argument(
         '--ckpt', default=None, type=str, help='load from previous checkpoints'
@@ -401,7 +399,18 @@ if __name__ == '__main__':
     g_running = StyledGenerator(code_size).cuda()
     g_running.train(False)
     
-    t_optimizer = optim.Adam(text_process.parameters(), lr=args.lr, betas=(0.0, 0.99))
+    param_optimizer = list(text_process.module.named_parameters())
+    no_decay = ['bias', 'gamma', 'beta']
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+         'weight_decay_rate': 0.01},
+        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
+         'weight_decay_rate': 0.0}
+    ]
+
+    t_optimizer = BertAdam(optimizer_grouped_parameters,
+                     lr=2e-5,
+                     warmup=.1)
     g_optimizer = optim.Adam(
         generator.module.generator.parameters(),
         lr=args.lr, betas=(0.0, 0.99)
@@ -413,7 +422,7 @@ if __name__ == '__main__':
             'mult': 0.01,
         }
     )
-    d_optimizer = optim.Adam(discriminator.parameters(), lr=2*args.lr, betas=(0.0, 0.99))
+    d_optimizer = optim.Adam(discriminator.parameters(), lr=4*args.lr, betas=(0.0, 0.99))
     
     accumulate(t_running, text_process.module, 0)
     accumulate(g_running, generator.module, 0)
@@ -446,8 +455,8 @@ if __name__ == '__main__':
     
     
     if args.sched:
-        args.lr = {4: 1e-3, 8: 1e-3, 16: 1e-3, 32: 1e-4, 64: 1e-4, 128: 1e-4, 256: 1e-4}
-        args.batch = {4: 128, 8: 128, 16: 64, 32: 32, 64: 32, 128: 16, 256: 16}
+        args.lr = {4: 1e-3, 8: 1e-3, 16: 1e-4, 32: 1e-4, 64: 1e-4, 128: 1e-4, 256: 1e-4}
+        args.batch = {4: 64, 8: 64, 16: 64, 32: 32, 64: 32, 128: 16, 256: 16}
 
     else:
         args.lr = {}

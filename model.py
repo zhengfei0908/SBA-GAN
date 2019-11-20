@@ -383,24 +383,24 @@ class Generator(nn.Module):
         self.progression = nn.ModuleList(
             [
                 StyledConvBlock(512, 512, 3, 1, initial=True),  # 4
-                StyledConvBlock(512, 512, 3, 1, upsample=True),  # 8
+#                 StyledConvBlock(512, 512, 3, 1, upsample=True),  # 8
                 StyledConvBlock(512, 256, 3, 1, upsample=True),  # 16
                 StyledConvBlock(256, 128, 3, 1, upsample=True, fused=fused),  # 32
                 StyledConvBlock(128, 64, 3, 1, upsample=True, fused=fused),  # 64
                 StyledConvBlock(64, 32, 3, 1, upsample=True, fused=fused),  # 128
-                StyledConvBlock(32, 16, 3, 1, upsample=True, fused=fused),  # 256
+#                 StyledConvBlock(32, 16, 3, 1, upsample=True, fused=fused),  # 256
             ]
         )
 
         self.to_rgb = nn.ModuleList(
             [
                 EqualConv2d(512, 3, 1),
-                EqualConv2d(512, 3, 1),
+#                 EqualConv2d(512, 3, 1),
                 EqualConv2d(256, 3, 1),
                 EqualConv2d(128, 3, 1),
                 EqualConv2d(64, 3, 1),
                 EqualConv2d(32, 3, 1),
-                EqualConv2d(16, 3, 1),
+#                 EqualConv2d(16, 3, 1),
             ]
         )
 
@@ -510,13 +510,14 @@ class Discriminator(nn.Module):
 
         self.progression = nn.ModuleList(
             [
-                ConvBlock(16, 32, 3, 1, downsample=True, fused=fused),  # 128
+#                 ConvBlock(16, 32, 3, 1, downsample=True, fused=fused),  # 128
                 ConvBlock(32, 64, 3, 1, downsample=True, fused=fused),  # 64
                 ConvBlock(64, 128, 3, 1, downsample=True, fused=fused),  # 32
                 ConvBlock(128, 256, 3, 1, downsample=True, fused=fused),  # 16
                 ConvBlock(256, 512, 3, 1, downsample=True),  # 8
                 ConvBlock(512, 512, 3, 1, downsample=True),  # 4
-                ConvBlock(513 + 128, 512, 3, 1, 4, 0),
+#                 ConvBlock(513 + 128, 512, 3, 1, 4, 0),
+                ConvBlock(513, 512, 3, 1, 4, 0),
             ]
         )
 
@@ -529,7 +530,7 @@ class Discriminator(nn.Module):
 
         self.from_rgb = nn.ModuleList(
             [
-                make_from_rgb(16),
+#                 make_from_rgb(16),
                 make_from_rgb(32),
                 make_from_rgb(64),
                 make_from_rgb(128),
@@ -558,7 +559,7 @@ class Discriminator(nn.Module):
                 mean_std = out_std.mean()
                 mean_std = mean_std.expand(out.size(0), 1, 4, 4)
                 sent_emb = sent_emb.view(out.size(0),-1,1,1).repeat(1, 1, 4, 4)
-                out = torch.cat([out, mean_std, sent_emb], 1)
+                out = torch.cat([out, mean_std], 1)
 
             out = self.progression[index](out)
             
@@ -577,7 +578,7 @@ class Discriminator(nn.Module):
 
 
 class BertEmbedding(nn.Module):
-    def __init__(self, max_length=24, embedding_dim=256):
+    def __init__(self, max_length=24, embedding_dim=128):
         super(BertEmbedding, self).__init__()
         self.max_length = max_length
         self.fc = nn.Linear(768, embedding_dim, bias = True)
@@ -607,7 +608,7 @@ class GLU(nn.Module):
         return x[:, :nc] * torch.sigmoid(x[:, nc:])
 
 class CaNet(nn.Module):
-    def __init__(self, embedding_dim=256, condition_dim=256):
+    def __init__(self, embedding_dim=128, condition_dim=128):
         super(CaNet, self).__init__()
         self.e_dim = embedding_dim
         self.c_dim = condition_dim
@@ -624,7 +625,7 @@ class CaNet(nn.Module):
         return eps.mul(std).add_(mu), mu, log_var
 
 class TextProcess(nn.Module):
-    def __init__(self, max_length=24, embedding_dim=512, condition_dim=512):
+    def __init__(self, max_length=24, embedding_dim=128, condition_dim=128):
         super(TextProcess, self).__init__()
         self.bert_embedding = BertEmbedding(max_length=max_length, embedding_dim=embedding_dim)
         self.ca_net = CaNet(embedding_dim=embedding_dim, condition_dim=condition_dim)
