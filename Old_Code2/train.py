@@ -115,7 +115,6 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
     gen_loss_val = 0
     grad_loss_val = 0
     kl_loss_val = 0
-    l1_loss_val = 0
     score = 0
     
     alpha = 0
@@ -142,7 +141,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
 
         alpha = min(1, 1 / args.phase * (used_sample + 1))
 #         if (resolution == args.init_size and args.ckpt is None) or final_progress:
-        if resolution == args.init_size or final_progress:
+        if (resolution == args.init_size and args.ckpt is None) or final_progress:
             alpha = 1
 
         if used_sample > args.phase * 2:
@@ -195,7 +194,8 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
         b_size = real_image.size(0)
         real_image = real_image.cuda()
         caption = caption.cuda()
-        c_code, sent_emb, words_embs, mu, log_var = text_process(caption)
+#         c_code, sent_emb, words_embs, mu, log_var = text_process(caption)
+        sent_emb, words_embs = text_process(caption)
 
         if args.loss == 'wgan-gp':
             real_predict = discriminator(real_image, sent_emb, step=step, alpha=alpha)
@@ -233,8 +233,8 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
                 2, 0
             )
             gen_in1, gen_in2 = gen_in1.squeeze(0), gen_in2.squeeze(0)
-            gen_in1 = torch.cat([gen_in1, c_code], dim=1)
-            gen_in2 = torch.cat([gen_in2, c_code], dim=1)
+            gen_in1 = torch.cat([gen_in1, sent_emb], dim=1)
+            gen_in2 = torch.cat([gen_in2, sent_emb], dim=1)
 
         fake_image = generator(gen_in1, step=step, alpha=alpha)
         fake_predict = discriminator(fake_image, sent_emb, step=step, alpha=alpha)
@@ -275,8 +275,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
             text_process.zero_grad()
             generator.zero_grad()
             
-            if resolution <= 8:
-                requires_grad(text_process, True)
+            requires_grad(text_process.module.bert_embedding.fc, True)
             requires_grad(generator, True)
             requires_grad(discriminator, False)
 
@@ -291,12 +290,12 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
             elif args.loss == 'r1':
                 loss = F.softplus(-predict).mean()
                 
-            kl_loss = KL_loss(mu, log_var)
-            (loss + kl_loss).backward()
+#             kl_loss = KL_loss(mu, log_var)
+            (loss).backward()
             
             if (i+1) % 10 == 0:
                 gen_loss_val = loss.item()
-                kl_loss_val = kl_loss.item()
+#                 kl_loss_val = kl_loss.item()
 
             t_optimizer.step()
             g_optimizer.step()
@@ -310,11 +309,12 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
         if (i + 1) % 1000 == 0:
             images = []
             with torch.no_grad():
-                fixed_c_code, _, _, _, _ = t_running(fixed_caption)
+#                 fixed_c_code, _, _, _, _ = t_running(fixed_caption)
+                sent_emb, _ = t_running(fixed_caption)
                 for _ in range(fixed_gen_i):
                     images.append(
                         g_running(
-                            torch.cat([torch.randn(fixed_gen_j, 384).cuda(), fixed_c_code[:fixed_gen_j]], dim=1), step=step, alpha=alpha
+                            torch.cat([torch.randn(fixed_gen_j, 384).cuda(), sent_emb[:fixed_gen_j]], dim=1), step=step, alpha=alpha
                         ).data.cpu()
                     )
                     
@@ -339,7 +339,7 @@ def train(args, dataset, text_process, generator, discriminator, inception_score
 
         state_msg = (
             f'Size: {4 * 2 ** step}; G: {gen_loss_val:.4f}; D: {disc_loss_val:.4f}; '
-            f'KL: {kl_loss_val:.4f}; L1: {l1_loss_val}; Grad: {grad_loss_val:.4f}; '
+            f'KL: {kl_loss_val:.4f}; Grad: {grad_loss_val:.4f}; '
             f'IS: {score: .4f}; '
             f'Alpha: {alpha:.4f};'
         )
@@ -399,18 +399,11 @@ if __name__ == '__main__':
     g_running = StyledGenerator(code_size).cuda()
     g_running.train(False)
     
-    param_optimizer = list(text_process.module.named_parameters())
-    no_decay = ['bias', 'gamma', 'beta']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
-         'weight_decay_rate': 0.01},
-        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)],
-         'weight_decay_rate': 0.0}
-    ]
 
-    t_optimizer = BertAdam(optimizer_grouped_parameters,
-                     lr=2e-5,
-                     warmup=.1)
+    t_optimizer = optim.Adam(
+        text_process.module.parameters(),
+        lr=args.lr, betas=(0.0, 0.99)
+    )
     g_optimizer = optim.Adam(
         generator.module.generator.parameters(),
         lr=args.lr, betas=(0.0, 0.99)
@@ -455,7 +448,7 @@ if __name__ == '__main__':
     
     
     if args.sched:
-        args.lr = {4: 1e-3, 8: 1e-3, 16: 1e-4, 32: 1e-4, 64: 1e-4, 128: 1e-4, 256: 1e-4}
+        args.lr = {4: 1e-3, 8: 1e-3, 16: 5e-4, 32: 1e-4, 64: 1e-4, 128: 1e-4, 256: 1e-4}
         args.batch = {4: 64, 8: 64, 16: 64, 32: 32, 64: 32, 128: 16, 256: 16}
 
     else:
