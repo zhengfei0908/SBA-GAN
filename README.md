@@ -1,55 +1,30 @@
-# COMS4995_SBA-GAN
+# SBA-GAN
+![](./figs/network.png)
 
-## Task
-Fei Zheng: main model
-- Main model, return CLASS model which can be called by Runtime Function.
+[proposal](./docs/proposal.pdf)
 
-Chirong Zhang: runtime functions
-- Given model as parameter, custom runtime fuction to train and test model
-- train.py (epoch, mini_batch, print_info, dir_creat, image_generate....)
+[milestone](./docs/milestone.pdf)
 
-Xiaoxi Zhao: dataloader, metrics and util functions
-- dataloader.py(batch, dir....)
-- metrics.py(inception score, R-precision)
-- util.py...to be decided
-#############finished############
-
-## TODO
-1. Code Integration
-2. Progressive training
-3. WGAN loss
-4. Try different architectures
-
-## Results:
-
-Generated images: https://drive.google.com/open?id=11J_XfP8IE53kUUfCL9ZGYbF5ZRvPyejj
-
-## Timeline
-Proposal: Oct. 15th 11:30-12:00am
-
-Milestone: Nov. 7th 11:30-12:00am
-
-Final report time: Dec. 3rd 12:00-12:30pm
+[report](./docs/report.pdf)
 
 
-## Reference
-### Paper:
+### Data
+- Download metadata [birds.zip](https://drive.google.com/file/d/1O_LtUP9sch09QH3s_EBAgLEctBQ5JBSJ/view?usp=sharing) and unzip it into `AttnGAN2/data/`
+- Download the [birds](http://www.vision.caltech.edu/visipedia/CUB-200-2011.html) dataset and save it in `AttnGAN2/data/birds/`
 
-BERT: [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805)
+### Pretrained Model
+- [DAMSM Baseline](https://drive.google.com/file/d/1J4nwRNkIRINYb38Bw3YfS6RLAyqyJiVB/view?usp=sharing): Download and save it to `AttnGAN2/DAMSMencoders/`
+- [DAMSM BERT](https://drive.google.com/file/d/1xXobeJHCsCnanaMQwzoHzIjURtDl6N75/view?usp=sharing): Download and save it to `AttnGAN2/DAMSMencoders/`
+- [Model Baseline](https://drive.google.com/file/d/1MotDo_aqCK_ZWV7HrzBuvxOrJcB3Z8Ll/view?usp=sharing): Download and save it to `AttnGAN2/models/`
+- [Model BERT](https://drive.google.com/file/d/1ksoJ53g76BPfymTMbLwx3S040whL2YhL/view?usp=sharing): Download and save it to `AttnGAN2/models/`
+- [Model Style Mixing](https://drive.google.com/file/d/1f6hXwOjeGZpYRvANAkhUEWcMVQqLBM36/view?usp=sharing): Download and save it to `AttnGAN2/models/`
 
-pgGAN: [Progressive Growing of GANs for Improved Quality, Stability, and Variation](https://arxiv.org/abs/1710.10196)
+### Training
+- Pretrain DAMSM baseline model: `python pretrain_DAMSM.py --cfg cfg/DAMSM/bird.yml --gpu 0`
+- Pretrain DAMSM BERT model: `python pretrain_DAMSM_bert.py --cfg cfg/DAMSM/bird.yml --gpu 0`
+- Train baseline model: `python main.py --cfg cfg/bird_style.yml --gpu 0`
+- Train BERT model: `python main_bert.py --cfg cfg/bird_style.yml --gpu 0`
 
-styleGAN: [A Style-Based Generator Architecture for Generative Adversarial Networks](https://arxiv.org/abs/1812.04948)
-
-cGAN: [Image-to-Image Translation with Conditional Adversarial Networks](https://arxiv.org/abs/1611.07004)
-
-text2image: [Generative Adversarial Text to Image Synthesis](https://arxiv.org/abs/1605.05396)  
-
-### Github:
-
-styleGAN: [https://github.com/NVlabs/stylegan](https://github.com/NVlabs/stylegan)
-
-text2image: [https://github.com/nashory/text2image-benchmark](https://github.com/nashory/text2image-benchmark)
-
-StyleGAN-tf2: [https://github.com/ialhashim/StyleGAN-Tensorflow2](https://github.com/ialhashim/StyleGAN-Tensorflow2)
-
+### Sampling
+- Run `python main_bert.py --cfg cfg/eval_bird.yml --gpu 0` to generate examples from captions in files listed in "AttnGAN2/data/birds/example_filenames.txt".
+- Input your own sentence in "AttnGAN2/data/birds/example_captions.txt" if you wannt to generate images from customized sentences.

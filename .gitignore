@@ -1,5 +1,6 @@
 /data
 /output
+/model
 
 # General
 .DS_Store
