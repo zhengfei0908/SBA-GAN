@@ -1,6 +1,6 @@
 from miscc.config import cfg, cfg_from_file
-from datasets import TextDataset
-from trainer import condGANTrainer as trainer
+from datasets_bert import TextDataset
+from trainer_bert import condGANTrainer as trainer
 
 import os
 import sys
@@ -98,10 +98,13 @@ if __name__ == "__main__":
     print('Using config:')
     pprint.pprint(cfg)
 
-    if not cfg.TRAIN.FLAG:
-        args.manualSeed = 100
-    elif args.manualSeed is None:
+#     if not cfg.TRAIN.FLAG:
+#         args.manualSeed = 4995
+#     elif args.manualSeed is None:
+#         args.manualSeed = random.randint(1, 10000)
+    if args.manualSeed is None:
         args.manualSeed = random.randint(1, 10000)
+    
     random.seed(args.manualSeed)
     np.random.seed(args.manualSeed)
     torch.manual_seed(args.manualSeed)
@@ -132,7 +135,7 @@ if __name__ == "__main__":
         dataset, batch_size=cfg.TRAIN.BATCH_SIZE,
         drop_last=True, shuffle=bshuffle, num_workers=int(cfg.WORKERS))
     print(len(dataloader))
-    np.save('./testcase',next(iter(dataloader)),allow_pickle=True)
+    # np.save('./testcase',next(iter(dataloader)),allow_pickle=True)
 #     Define models and go to train/evaluate
     algo = trainer(output_dir, dataloader, dataset.n_words, dataset.ixtoword)
 

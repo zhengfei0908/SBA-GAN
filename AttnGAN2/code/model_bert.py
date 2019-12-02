@@ -158,6 +158,35 @@ class RNN_ENCODER(nn.Module):
         sent_emb = sent_emb.view(-1, self.nhidden * self.num_directions)
         return words_emb, sent_emb
 
+class BertEncoder(nn.Module):
+    def __init__(self, embedding_dim=128):
+        super(BertEncoder, self).__init__()
+        self.max_length = cfg.TEXT.WORDS_NUM
+        self.fc = nn.Linear(768, embedding_dim, bias = True)
+        self.tanh = nn.Tanh()
+        self.conv_text = nn.Conv2d(768, embedding_dim, kernel_size=1, stride=1,
+                     padding=0, bias=True)
+
+        self.model = BertModel.from_pretrained('bert-base-uncased')
+        for i, layer in enumerate(self.model.children()):
+            if i == 2:
+                break
+            for param in layer.parameters():
+                param.requires_grad = False
+
+    def forward(self, captions):
+        # segment_ids = torch.tensor([0] * self.max_length).to(captions.device)
+        # mask_ids = (captions != 0).to(captions.device)
+        
+        words_embs, sent_emb = self.model(captions, output_all_encoded_layers=False)
+        words_embs = torch.transpose(words_embs, 1, 2).contiguous()
+        words_embs = words_embs.unsqueeze(3)
+        words_embs = self.conv_text(words_embs).squeeze(3)
+        words_embs = self.tanh(words_embs)
+        sent_emb = self.fc(sent_emb)
+        sent_emb = self.tanh(sent_emb)
+        
+        return words_embs, sent_emb
 
 class CNN_ENCODER(nn.Module):
     def __init__(self, nef):
@@ -195,6 +224,10 @@ class CNN_ENCODER(nn.Module):
         self.Mixed_7a = model.Mixed_7a
         self.Mixed_7b = model.Mixed_7b
         self.Mixed_7c = model.Mixed_7c
+        
+        for layer in [self.Mixed_7a, self.Mixed_7b, self.Mixed_7c]:
+            for param in layer.parameters():
+                param.requires_grad = True
 
         self.emb_features = conv1x1(768, self.nef)
         self.emb_cnn_code = nn.Linear(2048, self.nef)
@@ -310,6 +343,8 @@ class MAPPING_NET(nn.Module):
             nn.Linear(self.w_dim, self.w_dim, bias=False),
             nn.Linear(self.w_dim, self.w_dim, bias=False),
             nn.Linear(self.w_dim, self.w_dim, bias=False),
+            nn.Linear(self.w_dim, self.w_dim, bias=False),
+            nn.Linear(self.w_dim, self.w_dim, bias=False),
         )
     
     def forward(self, z_code):
@@ -343,8 +378,8 @@ class INIT_STAGE_G(nn.Module):
     def __init__(self, ngf, ncf):
         super(INIT_STAGE_G, self).__init__()
         self.gf_dim = ngf
-        self.in_dim = cfg.GAN.Z_DIM + ncf  # cfg.TEXT.EMBEDDING_DIM
-        # self.in_dim = ncf
+        # self.in_dim = cfg.GAN.Z_DIM + ncf  # cfg.TEXT.EMBEDDING_DIM
+        self.in_dim = ncf
 
         self.define_module()
 
@@ -356,29 +391,36 @@ class INIT_STAGE_G(nn.Module):
             GLU())
 
         self.upsample1 = upBlock(ngf, ngf // 2)
+        #self.adain1 = ADAIN_NORM(ngf // 2)
         self.upsample2 = upBlock(ngf // 2, ngf // 4)
+        #self.adain2 = ADAIN_NORM(ngf // 4)
         self.upsample3 = upBlock(ngf // 4, ngf // 8)
+        #self.adain3 = ADAIN_NORM(ngf // 8)
         self.upsample4 = upBlock(ngf // 8, ngf // 16)
+        #self.adain4 = ADAIN_NORM(ngf // 16)
 
-    def forward(self, z_code, c_code):
+    def forward(self, c_code, z_code, w_code):
         """
         :param z_code: batch x cfg.GAN.Z_DIM
         :param c_code: batch x cfg.TEXT.EMBEDDING_DIM
         :return: batch x ngf/16 x 64 x 64
         """
-        c_z_code = torch.cat((c_code, z_code), 1)
-        #c_z_code = c_code
         # state size ngf x 4 x 4
-        out_code = self.fc(c_z_code)
+        # out_code = torch.cat([c_code, z_code], dim=1)
+        out_code = self.fc(c_code)
         out_code = out_code.view(-1, self.gf_dim, 4, 4)
         # state size ngf/2 x 8 x 8
         out_code = self.upsample1(out_code)
+        # out_code = self.adain1(out_code, w_code)
         # state size ngf/4 x 16 x 16
         out_code = self.upsample2(out_code)
+        # out_code = self.adain2(out_code, w_code)
         # state size ngf/8 x 32 x 32
         out_code32 = self.upsample3(out_code)
+        #out_code32 = self.adain3(out_code32, w_code)
         # state size ngf/16 x 64 x 64
         out_code64 = self.upsample4(out_code32)
+        #out_code64 = self.adain4(out_code64, w_code)
 
         return out_code64
 
@@ -401,7 +443,8 @@ class NEXT_STAGE_G(nn.Module):
     def define_module(self):
         ngf = self.gf_dim
         self.att = ATT_NET(ngf, self.ef_dim)
-        self.adain = ADAIN_NORM(ngf)
+        # self.adain1 = ADAIN_NORM(ngf * 2)
+        self.adain2 = ADAIN_NORM(ngf)
         self.residual = self._make_layer(ResBlock, ngf * 2)
         self.upsample = upBlock(ngf * 2, ngf)
 
@@ -414,11 +457,13 @@ class NEXT_STAGE_G(nn.Module):
         """
         self.att.applyMask(mask)
         c_code, att = self.att(h_code, word_embs)
-        h_code = self.adain(h_code, w_code)
+        h_code = self.adain2(h_code, w_code)
         h_c_code = torch.cat((h_code, c_code), 1)
         out_code = self.residual(h_c_code)
+        #out_code = self.adain1(out_code, w_code)
         # state size ngf/2 x 2in_size x 2in_size
         out_code = self.upsample(out_code)
+        #out_code = self.adain2(out_code, w_code)
 
         return out_code, att
 
@@ -437,6 +482,63 @@ class GET_IMAGE_G(nn.Module):
         return out_img
 
 
+class G_NET_MIX(nn.Module):
+    def __init__(self):
+        super(G_NET_MIX, self).__init__()
+        ngf = cfg.GAN.GF_DIM
+        nef = cfg.TEXT.EMBEDDING_DIM
+        ncf = cfg.GAN.CONDITION_DIM
+        self.ca_net = CA_NET()
+        self.mapping_net = MAPPING_NET()
+
+        if cfg.TREE.BRANCH_NUM > 0:
+            self.h_net1 = INIT_STAGE_G(ngf * 16, ncf)
+            self.img_net1 = GET_IMAGE_G(ngf)
+        # gf x 64 x 64
+        if cfg.TREE.BRANCH_NUM > 1:
+            self.h_net2 = NEXT_STAGE_G(ngf, nef, ncf)
+            self.img_net2 = GET_IMAGE_G(ngf)
+        if cfg.TREE.BRANCH_NUM > 2:
+            self.h_net3 = NEXT_STAGE_G(ngf, nef, ncf)
+            self.img_net3 = GET_IMAGE_G(ngf)
+
+    def forward(self, z_code, sent_emb, word_embs, mask):
+        """
+            :param z_code: batch x cfg.GAN.Z_DIM
+            :param sent_emb: batch x cfg.TEXT.EMBEDDING_DIM
+            :param word_embs: batch x cdf x seq_len
+            :param mask: batch x seq_len
+            :return:
+        """
+        fake_imgs = []
+        att_maps = []
+        c_code, mu, logvar = self.ca_net(sent_emb)
+        w_code = None
+        w_code1 = self.mapping_net(z_code[0])
+        w_code2 = self.mapping_net(z_code[1])
+
+        if cfg.TREE.BRANCH_NUM > 0:
+            h_code1 = self.h_net1(c_code, z_code, w_code)
+            fake_img1 = self.img_net1(h_code1)
+            fake_imgs.append(fake_img1)
+        if cfg.TREE.BRANCH_NUM > 1:
+            h_code2, att1 = \
+                self.h_net2(h_code1, c_code, w_code1, word_embs, mask)
+            fake_img2 = self.img_net2(h_code2)
+            fake_imgs.append(fake_img2)
+            if att1 is not None:
+                att_maps.append(att1)
+        if cfg.TREE.BRANCH_NUM > 2:
+            h_code3, att2 = \
+                self.h_net3(h_code2, c_code, w_code2, word_embs, mask)
+            fake_img3 = self.img_net3(h_code3)
+            fake_imgs.append(fake_img3)
+            if att2 is not None:
+                att_maps.append(att2)
+
+        return fake_imgs, att_maps, mu, logvar
+
+    
 class G_NET(nn.Module):
     def __init__(self):
         super(G_NET, self).__init__()
@@ -471,7 +573,7 @@ class G_NET(nn.Module):
         w_code = self.mapping_net(z_code)
 
         if cfg.TREE.BRANCH_NUM > 0:
-            h_code1 = self.h_net1(z_code, c_code)
+            h_code1 = self.h_net1(c_code, z_code, w_code)
             fake_img1 = self.img_net1(h_code1)
             fake_imgs.append(fake_img1)
         if cfg.TREE.BRANCH_NUM > 1:

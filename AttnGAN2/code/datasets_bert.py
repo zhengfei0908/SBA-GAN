@@ -163,10 +163,12 @@ class TextDataset(data.Dataset):
                         continue
 
                     tokens_new = []
+                    #tokens_new.append('[CLS]')
                     for t in tokens:
                         t = t.encode('ascii', 'ignore').decode('ascii')
                         if len(t) > 0:
                             tokens_new.append(t)
+                    #tokens_new.append('[SEP]')
                     all_captions.append(tokens_new)
                     cnt += 1
                     if cnt == self.embeddings_num:

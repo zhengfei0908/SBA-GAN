@@ -13,9 +13,9 @@ from miscc.config import cfg
 from miscc.utils import mkdir_p
 from miscc.utils import build_super_images, build_super_images2
 from miscc.utils import weights_init, load_params, copy_G_params
-from model import G_DCGAN, G_NET
-from datasets import prepare_data
-from model import RNN_ENCODER, CNN_ENCODER
+from model_bert import G_DCGAN, G_NET, G_NET_MIX
+from datasets_bert import prepare_data
+from model_bert import BertEncoder, CNN_ENCODER
 
 from miscc.losses import words_loss
 from miscc.losses import discriminator_loss, generator_loss, KL_loss
@@ -62,7 +62,7 @@ class condGANTrainer(object):
         image_encoder.eval()
 
         text_encoder = \
-            RNN_ENCODER(self.n_words, nhidden=cfg.TEXT.EMBEDDING_DIM)
+            BertEncoder(cfg.TEXT.EMBEDDING_DIM)
         state_dict = \
             torch.load(cfg.TRAIN.NET_E,
                        map_location=lambda storage, loc: storage)
@@ -223,8 +223,13 @@ class condGANTrainer(object):
 
         batch_size = self.batch_size
         nz = cfg.GAN.Z_DIM
-        noise = Variable(torch.FloatTensor(batch_size, nz))
-        fixed_noise = Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1))
+        if cfg.TRAIN.MIXING:
+            noise = Variable(torch.FloatTensor(2, batch_size, nz))
+            fixed_noise = Variable(torch.FloatTensor(2, batch_size, nz).normal_(0, 1))
+        else:
+            noise = Variable(torch.FloatTensor(batch_size, nz))
+            fixed_noise = Variable(torch.FloatTensor(batch_size, nz).normal_(0, 1))
+        
         if cfg.CUDA:
             noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
 
@@ -245,10 +250,10 @@ class condGANTrainer(object):
                 data = data_iter.next()
                 imgs, captions, cap_lens, class_ids, keys = prepare_data(data)
 
-                hidden = text_encoder.init_hidden(batch_size)
+                # hidden = text_encoder.init_hidden(batch_size)
                 # words_embs: batch_size x nef x seq_len
                 # sent_emb: batch_size x nef
-                words_embs, sent_emb = text_encoder(captions, cap_lens, hidden)
+                words_embs, sent_emb = text_encoder(captions)
                 words_embs, sent_emb = words_embs.detach(), sent_emb.detach()
                 mask = (captions == 0)
                 num_words = words_embs.size(2)
@@ -300,14 +305,14 @@ class condGANTrainer(object):
 
                 if gen_iterations % 100 == 0:
                     print(D_logs + '\n' + G_logs)
-                # save images
-                if gen_iterations % 1000 == 0:
-                    backup_para = copy_G_params(netG)
-                    load_params(netG, avg_param_G)
-                    self.save_img_results(netG, fixed_noise, sent_emb,
-                                          words_embs, mask, image_encoder,
-                                          captions, cap_lens, epoch, name='average')
-                    load_params(netG, backup_para)
+            # save images
+            if epoch % 2 == 1:
+                backup_para = copy_G_params(netG)
+                load_params(netG, avg_param_G)
+                self.save_img_results(netG, fixed_noise, sent_emb,
+                                        words_embs, mask, image_encoder,
+                                      captions, cap_lens, epoch, name='average')
+                load_params(netG, backup_para)
                     #
                     # self.save_img_results(netG, fixed_noise, sent_emb,
                     #                       words_embs, mask, image_encoder,
@@ -360,7 +365,7 @@ class condGANTrainer(object):
             netG.cuda()
             netG.eval()
             #
-            text_encoder = RNN_ENCODER(self.n_words, nhidden=cfg.TEXT.EMBEDDING_DIM)
+            text_encoder = BertEncoder(cfg.TEXT.EMBEDDING_DIM)
             state_dict = \
                 torch.load(cfg.TRAIN.NET_E, map_location=lambda storage, loc: storage)
             text_encoder.load_state_dict(state_dict)
@@ -370,7 +375,10 @@ class condGANTrainer(object):
 
             batch_size = self.batch_size
             nz = cfg.GAN.Z_DIM
-            noise = Variable(torch.FloatTensor(batch_size, nz), volatile=True)
+            if cfg.TRAIN.MIXING:
+                noise = Variable(torch.FloatTensor(2, batch_size, nz), volatile=True)
+            else:
+                noise = Variable(torch.FloatTensor(batch_size, nz), volatile=True)
             noise = noise.cuda()
 
             model_dir = cfg.TRAIN.NET_G
@@ -397,10 +405,10 @@ class condGANTrainer(object):
 
                     imgs, captions, cap_lens, class_ids, keys = prepare_data(data)
 
-                    hidden = text_encoder.init_hidden(batch_size)
+                    # hidden = text_encoder.init_hidden(batch_size)
                     # words_embs: batch_size x nef x seq_len
                     # sent_emb: batch_size x nef
-                    words_embs, sent_emb = text_encoder(captions, cap_lens, hidden)
+                    words_embs, sent_emb = text_encoder(captions)
                     words_embs, sent_emb = words_embs.detach(), sent_emb.detach()
                     mask = (captions == 0)
                     num_words = words_embs.size(2)
@@ -435,7 +443,7 @@ class condGANTrainer(object):
         else:
             # Build and load the generator
             text_encoder = \
-                RNN_ENCODER(self.n_words, nhidden=cfg.TEXT.EMBEDDING_DIM)
+                BertEncoder(cfg.TEXT.EMBEDDING_DIM)
             state_dict = \
                 torch.load(cfg.TRAIN.NET_E, map_location=lambda storage, loc: storage)
             text_encoder.load_state_dict(state_dict)
@@ -448,14 +456,18 @@ class condGANTrainer(object):
                 netG = G_DCGAN()
             else:
                 netG = G_NET()
+                netG_mix = G_NET_MIX()
             s_tmp = cfg.TRAIN.NET_G[:cfg.TRAIN.NET_G.rfind('.pth')]
             model_dir = cfg.TRAIN.NET_G
             state_dict = \
                 torch.load(model_dir, map_location=lambda storage, loc: storage)
             netG.load_state_dict(state_dict)
+            netG_mix.load_state_dict(state_dict)
             print('Load G from: ', model_dir)
             netG.cuda()
+            netG_mix.cuda()
             netG.eval()
+            netG_mix.eval()
             for key in data_dic:
                 save_dir = '%s/%s' % (s_tmp, key)
                 print(save_dir)
@@ -470,49 +482,85 @@ class condGANTrainer(object):
                 captions = captions.cuda()
                 cap_lens = cap_lens.cuda()
                 for i in range(1):  # 16
-                    noise = Variable(torch.FloatTensor(batch_size, nz))
+                    noise = Variable(torch.FloatTensor(2, batch_size, nz))
                     noise = noise.cuda()
                     #######################################################
                     # (1) Extract text embeddings
                     ######################################################
-                    hidden = text_encoder.init_hidden(batch_size)
+                    # hidden = text_encoder.init_hidden(batch_size)
                     # words_embs: batch_size x nef x seq_len
                     # sent_emb: batch_size x nef
-                    words_embs, sent_emb = text_encoder(captions, cap_lens, hidden)
+                    words_embs, sent_emb = text_encoder(captions)
                     mask = (captions == 0)
                     #######################################################
                     # (2) Generate fake images
                     ######################################################
                     noise.data.normal_(0, 1)
-                    fake_imgs, attention_maps, _, _ = netG(noise, sent_emb, words_embs, mask)
+                    noise1 = noise[0]
+                    noise2 = noise[1]
+                    fake_imgs_mix1, attention_maps, _, _ = netG_mix(noise, sent_emb, words_embs, mask)
+                    noise = torch.cat([noise.chunk(2,0)[1], noise.chunk(2,0)[0]], dim=0)
+                    fake_imgs_mix2, attention_maps, _, _ = netG_mix(noise, sent_emb, words_embs, mask)
+                    fake_imgs1, attention_maps, _, _ = netG(noise1, sent_emb, words_embs, mask)
+                    fake_imgs2, attention_maps, _, _ = netG(noise2, sent_emb, words_embs, mask)
                     # G attention
                     cap_lens_np = cap_lens.cpu().data.numpy()
                     for j in range(batch_size):
                         save_name = '%s/%d_s_%d' % (save_dir, i, sorted_indices[j])
-                        for k in range(len(fake_imgs)):
-                            im = fake_imgs[k][j].data.cpu().numpy()
+                        for k in range(len(fake_imgs_mix1)):
+                            im = fake_imgs_mix1[k][j].data.cpu().numpy()
                             im = (im + 1.0) * 127.5
                             im = im.astype(np.uint8)
                             # print('im', im.shape)
                             im = np.transpose(im, (1, 2, 0))
                             # print('im', im.shape)
                             im = Image.fromarray(im)
-                            fullpath = '%s_g%d.png' % (save_name, k)
+                            fullpath = '%s_g%d_AB.png' % (save_name, k)
+                            im.save(fullpath)
+                        for k in range(len(fake_imgs_mix2)):
+                            im = fake_imgs_mix2[k][j].data.cpu().numpy()
+                            im = (im + 1.0) * 127.5
+                            im = im.astype(np.uint8)
+                            # print('im', im.shape)
+                            im = np.transpose(im, (1, 2, 0))
+                            # print('im', im.shape)
+                            im = Image.fromarray(im)
+                            fullpath = '%s_g%d_BA.png' % (save_name, k)
+                            im.save(fullpath)
+                        for k in range(len(fake_imgs1)):
+                            im = fake_imgs1[k][j].data.cpu().numpy()
+                            im = (im + 1.0) * 127.5
+                            im = im.astype(np.uint8)
+                            # print('im', im.shape)
+                            im = np.transpose(im, (1, 2, 0))
+                            # print('im', im.shape)
+                            im = Image.fromarray(im)
+                            fullpath = '%s_g%d_A.png' % (save_name, k)
+                            im.save(fullpath)
+                        for k in range(len(fake_imgs2)):
+                            im = fake_imgs2[k][j].data.cpu().numpy()
+                            im = (im + 1.0) * 127.5
+                            im = im.astype(np.uint8)
+                            # print('im', im.shape)
+                            im = np.transpose(im, (1, 2, 0))
+                            # print('im', im.shape)
+                            im = Image.fromarray(im)
+                            fullpath = '%s_g%d_B.png' % (save_name, k)
                             im.save(fullpath)
 
-                        for k in range(len(attention_maps)):
-                            if len(fake_imgs) > 1:
-                                im = fake_imgs[k + 1].detach().cpu()
-                            else:
-                                im = fake_imgs[0].detach().cpu()
-                            attn_maps = attention_maps[k]
-                            att_sze = attn_maps.size(2)
-                            img_set, sentences = \
-                                build_super_images2(im[j].unsqueeze(0),
-                                                    captions[j].unsqueeze(0),
-                                                    [cap_lens_np[j]], self.ixtoword,
-                                                    [attn_maps[j]], att_sze)
-                            if img_set is not None:
-                                im = Image.fromarray(img_set)
-                                fullpath = '%s_a%d.png' % (save_name, k)
-                                im.save(fullpath)
+#                         for k in range(len(attention_maps)):
+#                             if len(fake_imgs) > 1:
+#                                 im = fake_imgs[k + 1].detach().cpu()
+#                             else:
+#                                 im = fake_imgs[0].detach().cpu()
+#                             attn_maps = attention_maps[k]
+#                             att_sze = attn_maps.size(2)
+#                             img_set, sentences = \
+#                                 build_super_images2(im[j].unsqueeze(0),
+#                                                     captions[j].unsqueeze(0),
+#                                                     [cap_lens_np[j]], self.ixtoword,
+#                                                     [attn_maps[j]], att_sze)
+#                             if img_set is not None:
+#                                 im = Image.fromarray(img_set)
+#                                 fullpath = '%s_a%d.png' % (save_name, k)
+#                                 im.save(fullpath)

@@ -45,6 +45,8 @@ __C.TRAIN.SMOOTH.GAMMA3 = 10.0
 __C.TRAIN.SMOOTH.GAMMA2 = 5.0
 __C.TRAIN.SMOOTH.LAMBDA = 1.0
 
+__C.TRAIN.MIXING = False #True #False
+
 
 # Modal options
 __C.GAN = edict()
@@ -61,7 +63,7 @@ __C.GAN.B_DCGAN = False
 __C.TEXT = edict()
 __C.TEXT.CAPTIONS_PER_IMAGE = 10
 __C.TEXT.EMBEDDING_DIM = 256
-__C.TEXT.WORDS_NUM = 18
+__C.TEXT.WORDS_NUM = 20
 
 
 def _merge_a_into_b(a, b):

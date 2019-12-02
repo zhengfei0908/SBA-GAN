@@ -13,10 +13,10 @@ TREE:
 
 TRAIN:
     FLAG: True
-    NET_E: ''  # '../DAMSMencoders/bird/text_encoder200.pth'
-    BATCH_SIZE: 48
+    NET_E: '' # '../output/birds_DAMSM_bert2_good/Model/text_encoder100.pth'
+    BATCH_SIZE: 32
     MAX_EPOCH: 600
-    SNAPSHOT_INTERVAL: 50
+    SNAPSHOT_INTERVAL: 20
     ENCODER_LR: 0.0002  # 0.0002best; 0.002good; scott: 0.0007 with 0.98decay
     RNN_GRAD_CLIP: 0.25
     SMOOTH:

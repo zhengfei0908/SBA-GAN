@@ -8,7 +8,7 @@ from miscc.config import cfg, cfg_from_file
 from datasets_bert import TextDataset
 from datasets_bert import prepare_data
 
-from model import  CNN_ENCODER,BertEncoder
+from model_bert import  CNN_ENCODER,BertEncoder
 
 import os
 import sys
@@ -260,7 +260,10 @@ if __name__ == "__main__":
 
     # Train ##############################################################
     text_encoder, image_encoder, labels, start_epoch = build_models()
-    para = list(text_encoder.parameters())
+    para = []
+    for v in text_encoder.parameters():
+        if v.requires_grad:
+            para.append(v)
     for v in image_encoder.parameters():
         if v.requires_grad:
             para.append(v)
