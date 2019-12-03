@@ -117,12 +117,13 @@ With the appearance of StyleGAN\cite{stylegan}, researchers have proposed new ne
 \end{figure*}
 
 \section{Methods: Style-Based Attentional Generative Adversarial Network}
-As shown in Figure \ref{model}, SBA-GAN integrates StyleGAN\cite{stylegan} and AttnGAN\cite{attngan}. Unlike common practice, we separates latent variable $\math{z}$ from conditional sentence feature vector and use disentangled latent variable $\math{w}$ to control the style of images through the style module(AdaIN) during generation process. Technically, SBA-GAN can be divided into two main parts: text encoder and attentional style generator.
+As shown in Figure \ref{model}, SBA-GAN integrates StyleGAN\cite{stylegan} and AttnGAN\cite{attngan}. Unlike common practice, we separate latent variable $\math{z}$ from conditional sentence feature vector and use disentangled latent variable $\math{w}$ to control the style of images through the style module(AdaIN) during generation process. Technically, SBA-GAN can be divided into two main parts: text encoder and attentional style generator.
 
 
 \subsection{Text Encoder}
-First, we introduce the text encoder module that transforms the texts to features. We try two types of the text encoders, plain RNN with LSTM units\cite{lstm} and BERT\cite{bert}. LSTM helps to handle long term dependency problems which is now a standard method in natural language processing while BERT is a great breakthrough in the domain of pre-trained NLP. In previous work in text-to-image field like AttnGAN\cite{attngan} and MirrorGAN\cite{mirrorgan}, BERT is rarely applied to extract information from sentence. In our experiments, we compare the pre-trained BERT with our baseline, LSTM and BERT version outperforms the baseline. 
-In terms of how the text encoders are used, we embed the given text description into both word-level features that work mainly in attention modules and sentence-level features that work mainly in generation process.
+First, we introduce the text encoder module that transforms the texts to features. We try two types of the text encoders, plain RNN with LSTM units\cite{lstm} and BERT\cite{bert}. LSTM helps to handle long term dependency problems and is now a standard method in natural language processing while BERT is a great breakthrough in the domain of pre-trained NLP. In previous work in text-to-image field like AttnGAN\cite{attngan} and MirrorGAN\cite{mirrorgan}, BERT is rarely applied to extract information from sentence. In our experiments, we compare the pre-trained BERT with our baseline, LSTM and BERT version outperform the baseline. 
+
+In terms of how the text encoders are used, we embed the given text descriptions into both word-level features that work mainly in attention modules and sentence-level features that work mainly in generation process.
 
 Due to the diversity of the text domain or language and in order to enhance the model robustness, we introduce some noises in sentence-level features by using Conditional Augmentation\cite{stackgan}. In Figure \ref{model}, we use $F^{ca}$ to represent this module.
 \begin{equation}
@@ -135,24 +136,24 @@ Unlike common practice in conditional GAN, we only input the augmented sentence 
 \subsection{Attentional Style Generator}
 Next we introduce the style-base attentional generator. We adopt the general architecture described in AttnGAN\cite{attngan} because of its outstanding results.
 
-In the mapping network $\math{g}$, we use a 8-layer MLP to disentangle the latent variable $z$ into latent variable $w$. And as proposed in StyleGAN\cite{stylegan}, the mapping network consists of 8 fully connected layer without bias.
+In the mapping network $\math{g}$, we use a 8-layer MLP to disentangle the latent variable $z$ into latent variable $w$. And as proposed in StyleGAN\cite{stylegan}, the mapping network consists of 8 fully connected layers without bias.
 \begin{equation}
     w = MLP(z)
 \end{equation}
 
 In the generation part, we follow the practice of AttnGAN\cite{attngan} and use the structure of StackGAN\cite{stackgan} to generate images with resolution $64^2$, $128^2$ and $256^2$.
 
-During each generation block, attention modules $F_i^a$ mixes word-level features $e \in \mathcal{R}^{D \times T}$ and image features $h \in \mathcal{R}^{\hat{D} \times T}$ from previous block and retrieves the most relevant word vectors for generating different sub-regions of the image. Word-level features first are converted into the common semantic space with same dimension as image features,
+During each generation block, attention modules $F_i^a$ mix word-level features $e \in \mathcal{R}^{D \times T}$ and image features $h \in \mathcal{R}^{\hat{D} \times T}$ from previous block and retrieve the most relevant word vectors to generate different sub-regions of the image. Word-level features are first converted into the common semantic space with same dimension as image features,
 \begin{equation}
     e^{'} = Ue,
 \end{equation}
-where $U \in \mathcal{R}^{\hat{D} \times D}$. The result $F_i^a(e, h) \in \mathcal{R}^{\hat{D} \times N}$($N$ is the number of sub-regions) is feature vectors of sub-regions, which can be represented as $(c_0, c_1,..., c_{N-1})$. For the $j^{th}$ sub-region,
+where $U \in \mathcal{R}^{\hat{D} \times D}$. The result $F_i^a(e, h) \in \mathcal{R}^{\hat{D} \times N}$($N$ is the number of sub-regions) is feature vector of sub-regions, which can be represented as $(c_0, c_1,..., c_{N-1})$. For the $j^{th}$ sub-region,
 \begin{equation}
     c_j = \sum_{i=0}^{T-1} \beta_{j, i}e_i^{'}, \beta_{j,i} = \frac{e^{s_{j,i}^{'}}}{\sum_{k=0}^{T-1} e^{s_{j,k}^{'}}},
 \end{equation}
 where $s_{j,k}^{'} = h_j^T e_i^{'}$. $\beta_{j,i}$ indicates the attention weight of the $i^{th}$ word for the $j^{th}$ sub-region of the image.
 
-Style modules inject style from disentangled latent space $\mathcal{W}$ to generation process. Following the practice as in StyleGAN\cite{stylegan}, we first use an affine transformation to specialize $\math{w}$ to \textit{style} $y \in \mathcal{R}^{2 \times \hat{D}}$, which can control the adaptive instance normalization(AdaIN) operation in each generation block.The AdaIN operation is defined as:
+Style modules inject style from disentangled latent space $\mathcal{W}$ to generation process. Following the practice in StyleGAN\cite{stylegan}, we first use an affine transformation to specialize $\math{w}$ to \textit{style} $y \in \mathcal{R}^{2 \times \hat{D}}$, which control the adaptive instance normalization(AdaIN) operation in each generation block. The AdaIN operation is defined as:
 \begin{equation}
     AdaIN(x_i, y) = y_{s,i} \frac{x_i - \mu(x_i)}{\sigma(x_i)} + y_{b,i},
 \end{equation}
@@ -174,7 +175,7 @@ And the discriminator $D_i$ is trained to minimize the discriminator loss:
 \end{align}
 where $x$ is from the true image distribution $P_{data}$ and $\hat{x}$ is from the model distribution $P_G$. The unconditional loss determines whether the image is real or fake and the conditional loss determines whether the image matches the sentence or not.
 
-Apart from the common GAN loss, we also employ DAMSM loss\cite{attngan}. DAMSM is proposed in AttnGAN and achieved good results. We consider this loss for two reasons. One is that we regard this loss as the critical reason that AttnGAN can achieve such good results. The other is that we also need to pre-train our BERT. DAMSM can be used to train BERT individually, which is fit for our limited computation resource.
+Apart from the common GAN loss, we also employ DAMSM loss\cite{attngan}. DAMSM was proposed in AttnGAN and achieved good results. We consider this loss for two reasons. One is that we regard this loss as the critical reason that AttnGAN can achieve such good results. The other is that we also need to pre-train our BERT. DAMSM can be used to train BERT individually, which is fit for our limited computation resource.
 
 So the total generator loss and the discriminator loss can be defined as below:
 \begin{equation}
@@ -208,9 +209,7 @@ test images belonging to 200 categories, each bird image has 10 text description
 
 \subsubsection{Evaluation Criteria}
 
-We will evaluate our approach by calculating the inception score\cite{inception} of generated images.
-
-Inception score is a quantitative evaluation measure to the objectiveness and diversity of generated images but cannot reflect whether the generated image is well conditioned on the given text description. 
+We will evaluate our approach by calculating the inception score\cite{inception} of generated images. Inception score is a quantitative evaluation measure to the objectiveness and diversity of generated images.
 
 % R-precision is on the other hand, an evaluation metric to measure the similarity of images and the corresponding texts. We calculate the cosine similarities between the image feature and the text feature and count the average accuracy at the different settings: top-r. If the ground truth falls into the top-r candidates, then the image and text are considered aligned, otherwise not.
 
@@ -221,7 +220,7 @@ For the text encoder part, we freeze most layers but the last layer of pre-train
 
 \subsection{Main Results}
 
-We conduct four different models based on attention GAN(Baseline model) and compare them by inception score.
+We conduct four different models based on AttnGAN(Baseline model) and compare them by inception score.
 "+ style" is the baseline model combined with style($s_0$ and $s_1$ in Figure\ref{fig1}).
 "+ BERT" replaces LSTM text encoder in "+ style"  with BERT text encoder.
 In "+ Style mixing", $s_0$ and $s_1$ are generated from different $w$ and is trained on "+ BERT".
@@ -265,9 +264,9 @@ customized text descriptions. The vertical variate is from the different latent 
 \subsubsection{Attention Analysis}
 
 Attention visualization is presented in Figure\ref{fig2},\ref{fig3} which further proves that our model is able to learn how to generate the plot precisely.
-Figure\ref{fig2} shows that attention can be allocated to correct positions. For example, attention of none-semantic words like "a", "bird","with" are allocated globally while attention of semantic words like "while" and "yellow" are allocated precisely on the right place.
+Figure\ref{fig2} shows that attention can be allocated to correct positions. For example, attention of none-semantic words like "a", "bird","with" are allocated globally while attention of semantic words like "white" and "yellow" are allocated on the right place.
 
-Figure\ref{fig3} present how the model learn to generate plot. For example, the attention of word "green" in the stage one and stage two is different. In the first plot, the highlight part is approximated, a large area while in stage 2, it is located in the wings accurately. 
+Figure \ref{fig3} present how the model learn to generate plot. For example, the attention of word "green" in the stage one and stage two are different. In the first plot, the highlight part is approximated in a large area while in stage 2, it is located at the wings accurately. 
 
 
 \begin{figure}
@@ -286,7 +285,7 @@ Figure\ref{fig3} present how the model learn to generate plot. For example, the 
 \end{figure}
 As proposed in StyleGAN\cite{stylegan}, mixing regularization can encourage the styles to localize and we employ this strategy to make our generator more robust. To be specific, we generate two random latent variables $z_A$ and $z_B$, pass them through mapping network respectively and get $w_A$ and $w_B$. When generating an image, we should switch randomly from one to another with a certain probability. This technique prevents the network from assuming that styles are correlated.
 
-For simplicity, we implement style mixing technique by injecting two different random latent variable in order without randomness. \ref{fig4} shows some styles mixing results. The pattern is not that significant but we can still detect a little. For example, the yellow bird on the third row and the third column has a long tail and a short beak, which is a combination of the original two birds. The worse inception score might be due to the training methods we use.
+For simplicity, we implement style mixing technique by injecting two different random latent variable in order without randomness. Figure \ref{fig4} shows some styles mixing results. The pattern is not that significant but we can still detect a little. For example, the yellow bird on the third row and the third column has a long tail and a short beak, which is a combination of the original two birds. The worse inception score might be due to the training methods we use.
 
 
 \section{Discussion}
